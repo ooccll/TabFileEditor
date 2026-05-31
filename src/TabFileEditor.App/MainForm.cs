@@ -46,6 +46,7 @@ public sealed class MainForm : Form
     private readonly Button _openTableDirectoryButton = new();
     private readonly Button _saveButton = new();
     private readonly ToolStripStatusLabel _statusLabel = new();
+    private readonly Stack<DetailUndoAction> _undoStack = new();
 
     private TabTableDocument? _document;
     private bool _isDirty;
@@ -385,6 +386,7 @@ public sealed class MainForm : Form
         {
             _document = TabTableDocument.Load(path);
             _isDirty = false;
+            _undoStack.Clear();
             _rowSearchTextBox.Clear();
             PopulateDisplayColumnComboBox();
             RenderRows(selectFirstWhenAvailable: true);
@@ -394,6 +396,7 @@ public sealed class MainForm : Form
         {
             _document = null;
             _isDirty = false;
+            _undoStack.Clear();
             _displayColumnComboBox.Items.Clear();
             _displayColumnComboBox.Enabled = false;
             ClearRowsAndDetails();
@@ -748,7 +751,8 @@ public sealed class MainForm : Form
         }
 
         var value = _expandedValueEditorTextBox.Text;
-        if (value == TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex))
+        var oldValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
+        if (value == oldValue)
         {
             HideExpandedValueEditor();
             return true;
@@ -758,6 +762,9 @@ public sealed class MainForm : Form
         {
             _document.SetCellValue(selectedItem.Row, tableColumnIndex, value);
             _detailGrid.Rows[_expandedValueEditorRowIndex].Cells[_expandedValueEditorColumnIndex].Value = value;
+            PushUndoAction(new DetailUndoAction(
+                selectedItem.Row,
+                [new DetailUndoCell(_expandedValueEditorRowIndex, tableColumnIndex, oldValue)]));
             _isDirty = true;
             HideExpandedValueEditor();
             UpdateActionButtons();
@@ -817,9 +824,18 @@ public sealed class MainForm : Form
         }
 
         var value = Convert.ToString(_detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value) ?? string.Empty;
+        var oldValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
+        if (value == oldValue)
+        {
+            return;
+        }
+
         try
         {
             _document.SetCellValue(selectedItem.Row, tableColumnIndex, value);
+            PushUndoAction(new DetailUndoAction(
+                selectedItem.Row,
+                [new DetailUndoCell(e.RowIndex, tableColumnIndex, oldValue)]));
             _isDirty = true;
             UpdateActionButtons();
             RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
@@ -1061,6 +1077,14 @@ public sealed class MainForm : Form
             PasteClipboardToDetailGrid();
             e.SuppressKeyPress = true;
             e.Handled = true;
+            return;
+        }
+
+        if (e.KeyCode == Keys.Z)
+        {
+            UndoLastDetailChange();
+            e.SuppressKeyPress = true;
+            e.Handled = true;
         }
     }
 
@@ -1165,6 +1189,7 @@ public sealed class MainForm : Form
             return;
         }
 
+        var undoCells = new List<DetailUndoCell>();
         _loadingDetails = true;
         try
         {
@@ -1177,9 +1202,14 @@ public sealed class MainForm : Form
                 }
 
                 var newValue = clipboardValues[offset];
+                var oldValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
                 _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
                 _detailGrid.Rows[rowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
                 _detailGrid.Rows[rowIndex].ErrorText = string.Empty;
+                if (oldValue != newValue)
+                {
+                    undoCells.Add(new DetailUndoCell(rowIndex, tableColumnIndex, oldValue));
+                }
             }
         }
         catch (ArgumentException ex)
@@ -1193,14 +1223,63 @@ public sealed class MainForm : Form
             _loadingDetails = false;
         }
 
-        _isDirty = true;
-        UpdateActionButtons();
-        RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+        PushUndoAction(new DetailUndoAction(selectedItem.Row, undoCells));
+        if (undoCells.Count > 0)
+        {
+            _isDirty = true;
+            UpdateActionButtons();
+            RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+        }
 
         var overflowCount = clipboardValues.Count - pasteCount;
         SetStatus(overflowCount > 0
             ? $"已粘贴 {pasteCount} 项，超出 {overflowCount} 项未粘贴。"
             : $"已粘贴 {pasteCount} 项。");
+    }
+
+    private void UndoLastDetailChange()
+    {
+        if (_undoStack.Count == 0)
+        {
+            SetStatus("没有可撤销的操作。");
+            return;
+        }
+
+        var action = _undoStack.Pop();
+        if (_document is null || !_document.Rows.Any(row => ReferenceEquals(row, action.Row)))
+        {
+            SetStatus("没有可撤销的操作。");
+            return;
+        }
+
+        HideExpandedValueEditor();
+        _loadingDetails = true;
+        try
+        {
+            foreach (var undoCell in action.Cells)
+            {
+                _document.SetCellValue(action.Row, undoCell.TableColumnIndex, undoCell.OldValue);
+            }
+        }
+        finally
+        {
+            _loadingDetails = false;
+        }
+
+        _isDirty = true;
+        RenderRows(selectFirstWhenAvailable: true, preferredRow: action.Row);
+        UpdateActionButtons();
+        SetStatus($"已撤销 {action.Cells.Count} 项。");
+    }
+
+    private void PushUndoAction(DetailUndoAction action)
+    {
+        if (action.Cells.Count == 0)
+        {
+            return;
+        }
+
+        _undoStack.Push(action);
     }
 
     private static IReadOnlyList<string> ParseClipboardValuesForValueColumn(string text)
@@ -1332,6 +1411,7 @@ public sealed class MainForm : Form
 
     private void ClearRowsAndDetails()
     {
+        _undoStack.Clear();
         _rowListBox.Items.Clear();
         ClearDetails();
     }
@@ -1494,4 +1574,13 @@ public sealed class MainForm : Form
             return Text;
         }
     }
+
+    private sealed record DetailUndoAction(
+        TabTableRow Row,
+        IReadOnlyList<DetailUndoCell> Cells);
+
+    private sealed record DetailUndoCell(
+        int DetailRowIndex,
+        int TableColumnIndex,
+        string OldValue);
 }

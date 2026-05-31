@@ -430,6 +430,202 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DetailGridUndoRestoresLastSingleValueEdit()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+            detailGrid.Rows[1].Cells["Value"].Value = "UndoQuest";
+            InvokePrivate(
+                form,
+                "DetailGridCellValueChanged",
+                detailGrid,
+                new DataGridViewCellEventArgs(detailGrid.Columns["Value"]!.Index, 1));
+            Assert.Equal("[1] UndoQuest", rowListBox.Items[0].ToString());
+
+            var keyArgs = new KeyEventArgs(Keys.Control | Keys.Z);
+            InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            Assert.True(keyArgs.SuppressKeyPress);
+            Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells["Value"].Value);
+            Assert.Equal("[1] FirstQuest", rowListBox.Items[0].ToString());
+            Assert.True(FindButton(form, "保存").Enabled);
+            Assert.Contains("已撤销 1 项", GetStatusText(form));
+        });
+    }
+
+    [Fact]
+    public void DetailGridUndoRestoresExpandedValueEdit()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateLongDescriptionTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            var oldValue = Convert.ToString(detailGrid.CurrentCell.Value) ?? string.Empty;
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "展开编辑后撤销";
+            InvokePrivate(form, "CommitExpandedValueEditor");
+            Assert.Equal("展开编辑后撤销", detailGrid.Rows[2].Cells["Value"].Value);
+
+            InvokePrivate(form, "UndoLastDetailChange");
+
+            Assert.Equal(oldValue, detailGrid.Rows[2].Cells["Value"].Value);
+            Assert.True(FindButton(form, "保存").Enabled);
+            Assert.Contains("已撤销 1 项", GetStatusText(form));
+        });
+    }
+
+    [Fact]
+    public void DetailGridUndoRestoresLastPasteAsSingleAction()
+    {
+        RunOnStaThread(() =>
+        {
+            try
+            {
+                var tablePath = CreateSampleTable();
+                using var form = new MainForm();
+                form.CreateControl();
+                FindFilePathTextBox(form).Text = tablePath;
+                InvokePrivate(form, "LoadCurrentFile");
+
+                var detailGrid = FindDetailGrid(form);
+                var rowListBox = FindDescendant<ListBox>(form);
+                Assert.NotNull(rowListBox);
+                detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+                Clipboard.SetText("PastedQuest\r\nPastedDesc");
+                InvokePrivate(form, "PasteClipboardToDetailGrid");
+                Assert.Equal("PastedQuest", detailGrid.Rows[1].Cells["Value"].Value);
+                Assert.Equal("PastedDesc", detailGrid.Rows[2].Cells["Value"].Value);
+
+                var keyArgs = new KeyEventArgs(Keys.Control | Keys.Z);
+                InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+                Assert.True(keyArgs.Handled);
+                Assert.True(keyArgs.SuppressKeyPress);
+                Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells["Value"].Value);
+                Assert.Equal("AlphaPath说明", detailGrid.Rows[2].Cells["Value"].Value);
+                Assert.Equal("[1] FirstQuest", rowListBox.Items[0].ToString());
+                Assert.Contains("已撤销 2 项", GetStatusText(form));
+            }
+            finally
+            {
+                Clipboard.Clear();
+            }
+        });
+    }
+
+    [Fact]
+    public void DetailGridPasteUnchangedValuesDoesNotCreateUndoAction()
+    {
+        RunOnStaThread(() =>
+        {
+            try
+            {
+                var tablePath = CreateSampleTable();
+                using var form = new MainForm();
+                form.CreateControl();
+                FindFilePathTextBox(form).Text = tablePath;
+                InvokePrivate(form, "LoadCurrentFile");
+
+                var detailGrid = FindDetailGrid(form);
+                detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+                Clipboard.SetText("FirstQuest\r\nAlphaPath说明");
+                InvokePrivate(form, "PasteClipboardToDetailGrid");
+
+                var keyArgs = new KeyEventArgs(Keys.Control | Keys.Z);
+                InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+                Assert.True(keyArgs.Handled);
+                Assert.True(keyArgs.SuppressKeyPress);
+                Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells["Value"].Value);
+                Assert.Equal("AlphaPath说明", detailGrid.Rows[2].Cells["Value"].Value);
+                Assert.Equal("没有可撤销的操作。", GetStatusText(form));
+            }
+            finally
+            {
+                Clipboard.Clear();
+            }
+        });
+    }
+
+    [Fact]
+    public void DetailGridUndoWithEmptyStackOnlyUpdatesStatus()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+            var keyArgs = new KeyEventArgs(Keys.Control | Keys.Z);
+
+            InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            Assert.True(keyArgs.SuppressKeyPress);
+            Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells["Value"].Value);
+            Assert.Equal("没有可撤销的操作。", GetStatusText(form));
+        });
+    }
+
+    [Fact]
+    public void DetailGridUndoShortcutDoesNotInterceptExpandedValueEditor()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateLongDescriptionTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "编辑中";
+            var keyArgs = new KeyEventArgs(Keys.Control | Keys.Z);
+
+            InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+            Assert.False(keyArgs.Handled);
+            Assert.False(keyArgs.SuppressKeyPress);
+            Assert.Equal("编辑中", editBox.Text);
+        });
+    }
+
+    [Fact]
     public void DetailGridShortcutsDoNotInterceptExpandedValueEditor()
     {
         RunOnStaThread(() =>
