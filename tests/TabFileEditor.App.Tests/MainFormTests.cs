@@ -133,6 +133,34 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void LoadingFileWithEmptyDisplayColumnShowsOnlyIdInLeftList()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateIdZeroEmptyNameTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var comboBox = FindDisplayColumnComboBox(form);
+            Assert.Equal(1, comboBox.SelectedIndex);
+            Assert.Contains("szName", comboBox.Text);
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            Assert.Collection(
+                rowListBox.Items.Cast<object>().Select(item => item.ToString()),
+                item => Assert.Equal("[0]", item),
+                item => Assert.Equal("[1] FirstQuest", item));
+
+            var detailGrid = FindDetailGrid(form);
+            Assert.Equal(string.Empty, detailGrid.Rows[1].Cells["Value"].Value);
+        });
+    }
+
+    [Fact]
     public void SearchFiltersLeftRowListByAnyCellValueAndAllKeywords()
     {
         RunOnStaThread(() =>
@@ -247,6 +275,20 @@ public sealed class MainFormTests : IDisposable
             "ID\tName\tDesc",
             "int\tstring\tstring",
             "0\tDefaultQuest\t默认行",
+            "1\tFirstQuest\t第一条",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateIdZeroEmptyNameTable()
+    {
+        var path = Path.Combine(_tempDir, "ZeroEmptyNameQuestTab.xls");
+        var lines = new[]
+        {
+            "ID\tszName\tDesc",
+            "int\tstring\tstring",
+            "0\t\t默认行",
             "1\tFirstQuest\t第一条",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);

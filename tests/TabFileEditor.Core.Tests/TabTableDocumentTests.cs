@@ -76,6 +76,40 @@ public sealed class TabTableDocumentTests : IDisposable
     }
 
     [Fact]
+    public void BuildRowListTextUsesOnlyIdWhenDisplayColumnIsEmpty()
+    {
+        var path = Path.Combine(_tempDir, "EmptyNameWithId.tab");
+        CreateTextTable(
+            path,
+            ["ID", "szName", "Desc"],
+            ["int", "string", "string"],
+            ["0", "", "默认行"],
+            ["1", "FirstQuest", "第一条"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.Equal(1, table.RecommendedDisplayColumnIndex);
+        Assert.Equal("[0]", table.BuildRowListText(table.DataRows[0], table.RecommendedDisplayColumnIndex));
+        Assert.Equal(string.Empty, TabTableDocument.GetCellValue(table.DataRows[0], table.RecommendedDisplayColumnIndex));
+        Assert.Equal("[1] FirstQuest", table.BuildRowListText(table.DataRows[1], table.RecommendedDisplayColumnIndex));
+    }
+
+    [Fact]
+    public void BuildRowListTextKeepsRowFallbackForEmptyDisplayColumnWithoutId()
+    {
+        var path = Path.Combine(_tempDir, "EmptyNameWithoutId.tab");
+        CreateTextTable(
+            path,
+            ["Key", "Value"],
+            ["Alpha", ""]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.False(table.HasIdColumn);
+        Assert.Equal("第2行", table.BuildRowListText(table.DataRows[1], 1));
+    }
+
+    [Fact]
     public void UsesFirstNumericIdRowEvenWhenItIsNotZeroOrOne()
     {
         var path = Path.Combine(_tempDir, "HighId.tab");

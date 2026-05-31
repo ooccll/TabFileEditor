@@ -129,17 +129,12 @@ public sealed class TabTableDocument
     public string BuildRowListText(TabTableRow row, int displayColumnIndex)
     {
         var value = GetCellValue(row, displayColumnIndex).Trim();
-        if (string.IsNullOrEmpty(value))
+        if (HasIdColumn && long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
         {
-            value = $"第{row.RowIndex + 1}行";
+            return string.IsNullOrEmpty(value) ? $"[{id}]" : $"[{id}] {value}";
         }
 
-        if (!HasIdColumn || !long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
-        {
-            return value;
-        }
-
-        return string.IsNullOrEmpty(value) ? $"[{id}]" : $"[{id}] {value}";
+        return string.IsNullOrEmpty(value) ? $"第{row.RowIndex + 1}行" : value;
     }
 
     public static string GetCellValue(TabTableRow row, int columnIndex)
