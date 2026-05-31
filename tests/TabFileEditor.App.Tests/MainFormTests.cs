@@ -278,6 +278,218 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void SaveShortcutWritesEditedValueAndDisablesSaveButton()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.Rows[2].Cells["Value"].Value = "快捷键保存描述";
+            InvokePrivate(
+                form,
+                "DetailGridCellValueChanged",
+                detailGrid,
+                new DataGridViewCellEventArgs(detailGrid.Columns["Value"]!.Index, 2));
+            var saveButton = FindButton(form, "保存");
+            Assert.True(saveButton.Enabled);
+
+            var handled = InvokeProcessCmdKey(form, Keys.Control | Keys.S);
+
+            Assert.True(handled);
+            Assert.False(saveButton.Enabled);
+            Assert.Contains("FirstQuest\t快捷键保存描述", File.ReadAllText(tablePath, GbkEncoding));
+        });
+    }
+
+    [Fact]
+    public void DetailGridCopiesSelectedValueCellsWithShortcut()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+            detailGrid.ClearSelection();
+            detailGrid.Rows[1].Cells["Value"].Selected = true;
+            detailGrid.Rows[2].Cells["Value"].Selected = true;
+            var keyArgs = new KeyEventArgs(Keys.Control | Keys.C);
+
+            InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            Assert.True(keyArgs.SuppressKeyPress);
+            Assert.Equal("FirstQuest\r\nAlphaPath说明", Clipboard.GetText());
+            Assert.Contains("已复制 2 个单元格", GetStatusText(form));
+            Clipboard.Clear();
+        });
+    }
+
+    [Fact]
+    public void DetailGridPastesClipboardRowsDownFromCurrentValueCellWithShortcut()
+    {
+        RunOnStaThread(() =>
+        {
+            try
+            {
+                var tablePath = CreateSampleTable();
+                using var form = new MainForm();
+                form.CreateControl();
+                FindFilePathTextBox(form).Text = tablePath;
+                InvokePrivate(form, "LoadCurrentFile");
+
+                var detailGrid = FindDetailGrid(form);
+                var rowListBox = FindDescendant<ListBox>(form);
+                Assert.NotNull(rowListBox);
+                detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+                Clipboard.SetText("CopiedQuest\r\nCopiedDesc");
+                var keyArgs = new KeyEventArgs(Keys.Control | Keys.V);
+
+                InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+                Assert.True(keyArgs.Handled);
+                Assert.True(keyArgs.SuppressKeyPress);
+                Assert.Equal("CopiedQuest", detailGrid.Rows[1].Cells["Value"].Value);
+                Assert.Equal("CopiedDesc", detailGrid.Rows[2].Cells["Value"].Value);
+                Assert.Equal("[1] CopiedQuest", rowListBox.Items[0].ToString());
+                Assert.True(FindButton(form, "保存").Enabled);
+                Assert.Contains("已粘贴 2 项", GetStatusText(form));
+            }
+            finally
+            {
+                Clipboard.Clear();
+            }
+        });
+    }
+
+    [Fact]
+    public void DetailGridPasteUsesLastClipboardColumnAndReportsOverflow()
+    {
+        RunOnStaThread(() =>
+        {
+            try
+            {
+                var tablePath = CreateSampleTable();
+                using var form = new MainForm();
+                form.CreateControl();
+                FindFilePathTextBox(form).Text = tablePath;
+                InvokePrivate(form, "LoadCurrentFile");
+
+                var detailGrid = FindDetailGrid(form);
+                detailGrid.CurrentCell = detailGrid.Rows[2].Cells["Value"];
+                Clipboard.SetText("字段\t说明\tOnlyLastColumn\r\n字段2\t说明2\tOverflow");
+
+                InvokePrivate(form, "PasteClipboardToDetailGrid");
+
+                Assert.Equal("OnlyLastColumn", detailGrid.Rows[2].Cells["Value"].Value);
+                Assert.Contains("已粘贴 1 项，超出 1 项未粘贴", GetStatusText(form));
+            }
+            finally
+            {
+                Clipboard.Clear();
+            }
+        });
+    }
+
+    [Fact]
+    public void DetailGridPasteRequiresCurrentValueCell()
+    {
+        RunOnStaThread(() =>
+        {
+            try
+            {
+                var tablePath = CreateSampleTable();
+                using var form = new MainForm();
+                form.CreateControl();
+                FindFilePathTextBox(form).Text = tablePath;
+                InvokePrivate(form, "LoadCurrentFile");
+
+                var detailGrid = FindDetailGrid(form);
+                detailGrid.CurrentCell = detailGrid.Rows[1].Cells[0];
+                Clipboard.SetText("ShouldNotPaste");
+
+                InvokePrivate(form, "PasteClipboardToDetailGrid");
+
+                Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells["Value"].Value);
+                Assert.Equal("请先选中值列单元格再粘贴。", GetStatusText(form));
+            }
+            finally
+            {
+                Clipboard.Clear();
+            }
+        });
+    }
+
+    [Fact]
+    public void DetailGridShortcutsDoNotInterceptExpandedValueEditor()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateLongDescriptionTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.Equal(Convert.ToString(detailGrid.CurrentCell.Value), editBox.Text);
+            var keyArgs = new KeyEventArgs(Keys.Control | Keys.V);
+
+            InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+            Assert.False(keyArgs.Handled);
+            Assert.False(keyArgs.SuppressKeyPress);
+            Assert.Equal(Convert.ToString(detailGrid.CurrentCell.Value), editBox.Text);
+        });
+    }
+
+    [Fact]
+    public void DetailGridHighlightsCurrentRowAndPaintsCurrentCellBorder()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+
+            Assert.Equal(CurrentRowHighlightForTest(), detailGrid.Rows[2].DefaultCellStyle.BackColor);
+            Assert.Equal(Color.Empty, detailGrid.Rows[1].DefaultCellStyle.BackColor);
+            Assert.Equal(CurrentRowHighlightForTest(), detailGrid.DefaultCellStyle.SelectionBackColor);
+            Assert.Equal(TextColorForTest(), detailGrid.DefaultCellStyle.SelectionForeColor);
+
+            using var bitmap = new Bitmap(240, 40);
+            using var graphics = Graphics.FromImage(bitmap);
+            var paintArgs = CreateCellPaintingEventArgs(detailGrid, 2, valueColumnIndex, graphics);
+            InvokePrivate(form, "DetailGridCellPainting", detailGrid, paintArgs);
+
+            Assert.True(paintArgs.Handled);
+        });
+    }
+
+    [Fact]
     public void EditingLongValueCellUsesExpandedMultilineEditor()
     {
         RunOnStaThread(() =>
@@ -510,6 +722,26 @@ public sealed class MainFormTests : IDisposable
         return FindDescendants<Button>(form).Single(button => button.Text == text);
     }
 
+    private static string GetStatusText(Form form)
+    {
+        return FindDescendants<StatusStrip>(form)
+            .Single()
+            .Items
+            .OfType<ToolStripStatusLabel>()
+            .Single()
+            .Text ?? string.Empty;
+    }
+
+    private static bool InvokeProcessCmdKey(Form form, Keys keyData)
+    {
+        var method = form.GetType().GetMethod(
+            "ProcessCmdKey",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        var args = new object[] { new Message(), keyData };
+        return Assert.IsType<bool>(method.Invoke(form, args));
+    }
+
     private static void InvokePrivate(object target, string methodName, params object[] args)
     {
         var method = target.GetType().GetMethod(
@@ -538,6 +770,30 @@ public sealed class MainFormTests : IDisposable
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
         return Assert.IsAssignableFrom<T>(method.Invoke(target, args));
+    }
+
+    private static DataGridViewCellPaintingEventArgs CreateCellPaintingEventArgs(
+        DataGridView detailGrid,
+        int rowIndex,
+        int columnIndex,
+        Graphics graphics)
+    {
+        var cell = detailGrid.Rows[rowIndex].Cells[columnIndex];
+        var cellBounds = new Rectangle(0, 0, Math.Max(120, detailGrid.Columns[columnIndex].Width), detailGrid.Rows[rowIndex].Height);
+        return new DataGridViewCellPaintingEventArgs(
+            detailGrid,
+            graphics,
+            cellBounds,
+            cellBounds,
+            rowIndex,
+            columnIndex,
+            DataGridViewElementStates.Selected,
+            cell.Value,
+            Convert.ToString(cell.FormattedValue) ?? string.Empty,
+            string.Empty,
+            cell.InheritedStyle,
+            new DataGridViewAdvancedBorderStyle(),
+            DataGridViewPaintParts.All);
     }
 
     private static TControl? FindDescendant<TControl>(Control parent)
@@ -591,5 +847,10 @@ public sealed class MainFormTests : IDisposable
     private static Color TextColorForTest()
     {
         return ColorTranslator.FromHtml("#1F2937");
+    }
+
+    private static Color CurrentRowHighlightForTest()
+    {
+        return ColorTranslator.FromHtml("#D7E9FF");
     }
 }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using TabFileEditor.Core;
 
 namespace TabFileEditor.App;
@@ -27,6 +28,7 @@ public sealed class MainForm : Form
     private static readonly Color MutedTextColor = ColorTranslator.FromHtml("#475569");
     private static readonly Color ReadOnlyCellBg = SystemColors.Control;
     private static readonly Color CurrentRowHighlight = ColorTranslator.FromHtml("#D7E9FF");
+    private static readonly Color CurrentCellBorderColor = AccentColor;
     private static readonly Color SearchMatchHighlightColor = ColorTranslator.FromHtml("#FFF2A8");
     private static readonly Color DisabledButtonBg = ColorTranslator.FromHtml("#E5E7EB");
     private static readonly Color DisabledButtonTextColor = ColorTranslator.FromHtml("#8A8A8A");
@@ -279,6 +281,8 @@ public sealed class MainForm : Form
         _detailGrid.CellDoubleClick += DetailGridCellDoubleClick;
         _detailGrid.CellEndEdit += DetailGridCellEndEdit;
         _detailGrid.CellPainting += DetailGridCellPainting;
+        _detailGrid.KeyDown += DetailGridKeyDown;
+        _detailGrid.CurrentCellChanged += (_, _) => UpdateDetailCurrentRowHighlight();
         ConfigureExpandedValueEditor();
         _splitContainer.Panel2.Controls.Add(_detailGrid);
     }
@@ -562,6 +566,8 @@ public sealed class MainForm : Form
         {
             _loadingDetails = false;
         }
+
+        UpdateDetailCurrentRowHighlight();
     }
 
     private void ConfigureDetailColumns()
@@ -839,6 +845,17 @@ public sealed class MainForm : Form
         return Math.Max(DetailGridRowHeight, measured.Height + ExpandedValueEditorPadding);
     }
 
+    private void UpdateDetailCurrentRowHighlight()
+    {
+        var currentRowIndex = _detailGrid.CurrentCell?.RowIndex ?? -1;
+        foreach (DataGridViewRow row in _detailGrid.Rows)
+        {
+            row.DefaultCellStyle.BackColor = row.Index == currentRowIndex ? CurrentRowHighlight : Color.Empty;
+        }
+
+        _detailGrid.Invalidate();
+    }
+
     private void DetailGridCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         var graphics = e.Graphics;
@@ -849,12 +866,29 @@ public sealed class MainForm : Form
         }
 
         var ranges = GetDetailSearchMatchRanges(e.RowIndex, e.ColumnIndex);
-        if (ranges.Count == 0)
+        var isCurrentCell =
+            _detailGrid.CurrentCell is not null &&
+            e.RowIndex == _detailGrid.CurrentCell.RowIndex &&
+            e.ColumnIndex == _detailGrid.CurrentCell.ColumnIndex;
+        if (ranges.Count == 0 && !isCurrentCell)
         {
             return;
         }
 
-        PaintDetailValueCellWithSearchHighlight(e, graphics, cellStyle, ranges);
+        if (ranges.Count > 0)
+        {
+            PaintDetailValueCellWithSearchHighlight(e, graphics, cellStyle, ranges);
+        }
+        else
+        {
+            e.Paint(e.ClipBounds, e.PaintParts);
+        }
+
+        if (isCurrentCell)
+        {
+            DrawCurrentDetailCellBorder(e);
+        }
+
         e.Handled = true;
     }
 
@@ -992,6 +1026,203 @@ public sealed class MainForm : Form
             font,
             Size.Empty,
             TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width;
+    }
+
+    private static void DrawCurrentDetailCellBorder(DataGridViewCellPaintingEventArgs e)
+    {
+        var borderRectangle = e.CellBounds;
+        borderRectangle.Inflate(-1, -1);
+        using var pen = new Pen(CurrentCellBorderColor, 2);
+        e.Graphics!.DrawRectangle(pen, borderRectangle);
+    }
+
+    private void DetailGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_detailGrid.IsCurrentCellInEditMode || IsExpandedValueEditorActive())
+        {
+            return;
+        }
+
+        if (!e.Control || e.Alt || e.Shift)
+        {
+            return;
+        }
+
+        if (e.KeyCode == Keys.C)
+        {
+            CopySelectedDetailCellsToClipboard();
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyCode == Keys.V)
+        {
+            PasteClipboardToDetailGrid();
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+        }
+    }
+
+    private void CopySelectedDetailCellsToClipboard()
+    {
+        var selectedCells = _detailGrid.SelectedCells
+            .Cast<DataGridViewCell>()
+            .Where(cell => cell.RowIndex >= 0 && cell.ColumnIndex >= 0)
+            .OrderBy(cell => cell.RowIndex)
+            .ThenBy(cell => cell.ColumnIndex)
+            .ToList();
+        if (selectedCells.Count == 0 && _detailGrid.CurrentCell is { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell)
+        {
+            selectedCells.Add(currentCell);
+        }
+
+        if (selectedCells.Count == 0)
+        {
+            return;
+        }
+
+        var selectedRows = selectedCells
+            .Select(cell => cell.RowIndex)
+            .Distinct()
+            .OrderBy(rowIndex => rowIndex)
+            .ToList();
+        var selectedColumns = selectedCells
+            .Select(cell => cell.ColumnIndex)
+            .Distinct()
+            .OrderBy(columnIndex => columnIndex)
+            .ToList();
+        var selectedLocations = selectedCells
+            .Select(cell => (cell.RowIndex, cell.ColumnIndex))
+            .ToHashSet();
+        var builder = new StringBuilder();
+
+        for (var rowOffset = 0; rowOffset < selectedRows.Count; rowOffset++)
+        {
+            if (rowOffset > 0)
+            {
+                builder.Append("\r\n");
+            }
+
+            var rowIndex = selectedRows[rowOffset];
+            for (var columnOffset = 0; columnOffset < selectedColumns.Count; columnOffset++)
+            {
+                if (columnOffset > 0)
+                {
+                    builder.Append('\t');
+                }
+
+                var columnIndex = selectedColumns[columnOffset];
+                if (!selectedLocations.Contains((rowIndex, columnIndex)))
+                {
+                    continue;
+                }
+
+                builder.Append(SanitizeClipboardCell(Convert.ToString(_detailGrid.Rows[rowIndex].Cells[columnIndex].Value) ?? string.Empty));
+            }
+        }
+
+        Clipboard.SetText(builder.ToString());
+        SetStatus($"已复制 {selectedCells.Count} 个单元格。");
+    }
+
+    private void PasteClipboardToDetailGrid()
+    {
+        if (_detailGrid.CurrentCell is not { RowIndex: >= 0 } currentCell ||
+            currentCell.ColumnIndex < 0 ||
+            currentCell.ColumnIndex >= _detailGrid.Columns.Count ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value")
+        {
+            SetStatus("请先选中值列单元格再粘贴。");
+            return;
+        }
+
+        if (!Clipboard.ContainsText())
+        {
+            SetStatus("剪贴板没有可粘贴的文本。");
+            return;
+        }
+
+        var clipboardValues = ParseClipboardValuesForValueColumn(Clipboard.GetText());
+        if (clipboardValues.Count == 0)
+        {
+            SetStatus("剪贴板没有可粘贴的文本。");
+            return;
+        }
+
+        if (_document is null || _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        _detailGrid.EndEdit();
+
+        var availableRows = Math.Max(0, _detailGrid.Rows.Count - currentCell.RowIndex);
+        var pasteCount = Math.Min(clipboardValues.Count, availableRows);
+        if (pasteCount == 0)
+        {
+            SetStatus("没有可粘贴的目标行。");
+            return;
+        }
+
+        _loadingDetails = true;
+        try
+        {
+            for (var offset = 0; offset < pasteCount; offset++)
+            {
+                var rowIndex = currentCell.RowIndex + offset;
+                if (_detailGrid.Rows[rowIndex].Tag is not int tableColumnIndex)
+                {
+                    continue;
+                }
+
+                var newValue = clipboardValues[offset];
+                _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
+                _detailGrid.Rows[rowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
+                _detailGrid.Rows[rowIndex].ErrorText = string.Empty;
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            SetStatus(ex.Message);
+            MessageBox.Show(this, ex.Message, "无法粘贴单元格", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        finally
+        {
+            _loadingDetails = false;
+        }
+
+        _isDirty = true;
+        UpdateActionButtons();
+        RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+
+        var overflowCount = clipboardValues.Count - pasteCount;
+        SetStatus(overflowCount > 0
+            ? $"已粘贴 {pasteCount} 项，超出 {overflowCount} 项未粘贴。"
+            : $"已粘贴 {pasteCount} 项。");
+    }
+
+    private static IReadOnlyList<string> ParseClipboardValuesForValueColumn(string text)
+    {
+        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n').TrimEnd('\n');
+        if (normalized.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        return normalized
+            .Split('\n')
+            .Select(row => row.Split('\t').LastOrDefault() ?? string.Empty)
+            .ToList();
+    }
+
+    private static string SanitizeClipboardCell(string value)
+    {
+        return value
+            .Replace('\t', ' ')
+            .Replace('\r', ' ')
+            .Replace('\n', ' ');
     }
 
     private static IReadOnlyList<string> BuildSearchKeywords(string searchText)
