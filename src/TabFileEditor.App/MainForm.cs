@@ -283,6 +283,7 @@ public sealed class MainForm : Form
         _detailGrid.CellEndEdit += DetailGridCellEndEdit;
         _detailGrid.CellPainting += DetailGridCellPainting;
         _detailGrid.KeyDown += DetailGridKeyDown;
+        _detailGrid.KeyPress += DetailGridKeyPress;
         _detailGrid.CurrentCellChanged += (_, _) => UpdateDetailCurrentRowHighlight();
         ConfigureExpandedValueEditor();
         _splitContainer.Panel2.Controls.Add(_detailGrid);
@@ -652,7 +653,7 @@ public sealed class MainForm : Form
         _detailGrid.Rows[e.RowIndex].ErrorText = string.Empty;
     }
 
-    private void ShowExpandedValueEditor(int rowIndex, int columnIndex)
+    private void ShowExpandedValueEditor(int rowIndex, int columnIndex, string? initialText = null)
     {
         if (_document is null ||
             rowIndex < 0 ||
@@ -667,7 +668,7 @@ public sealed class MainForm : Form
         _expandedValueEditorRowIndex = rowIndex;
         _expandedValueEditorColumnIndex = columnIndex;
 
-        var text = Convert.ToString(_detailGrid.Rows[rowIndex].Cells[columnIndex].Value) ?? string.Empty;
+        var text = initialText ?? Convert.ToString(_detailGrid.Rows[rowIndex].Cells[columnIndex].Value) ?? string.Empty;
         var bounds = CalculateExpandedValueEditorBounds(rowIndex, columnIndex, text);
         var requiredHeight = CalculateExpandedValueEditorRequiredHeight(text, _detailGrid.Font, bounds.Width);
 
@@ -1050,6 +1051,23 @@ public sealed class MainForm : Form
         borderRectangle.Inflate(-1, -1);
         using var pen = new Pen(CurrentCellBorderColor, 2);
         e.Graphics!.DrawRectangle(pen, borderRectangle);
+    }
+
+    private void DetailGridKeyPress(object? sender, KeyPressEventArgs e)
+    {
+        if (_detailGrid.IsCurrentCellInEditMode ||
+            IsExpandedValueEditorActive() ||
+            char.IsControl(e.KeyChar) ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0 } currentCell ||
+            currentCell.ColumnIndex < 0 ||
+            currentCell.ColumnIndex >= _detailGrid.Columns.Count ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value")
+        {
+            return;
+        }
+
+        ShowExpandedValueEditor(currentCell.RowIndex, currentCell.ColumnIndex, e.KeyChar.ToString());
+        e.Handled = true;
     }
 
     private void DetailGridKeyDown(object? sender, KeyEventArgs e)

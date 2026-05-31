@@ -626,6 +626,109 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DetailGridKeyPressStartsExpandedEditorWithTypedCharacterReplacingOldValue()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+            var keyArgs = new KeyPressEventArgs('A');
+
+            InvokePrivate(form, "DetailGridKeyPress", detailGrid, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.Equal("A", editBox.Text);
+            Assert.Equal(1, editBox.SelectionStart);
+            Assert.Equal(0, editBox.SelectionLength);
+            Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells["Value"].Value);
+        });
+    }
+
+    [Fact]
+    public void DetailGridKeyPressStartsExpandedEditorForEmptyValueCell()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateIdZeroEmptyNameTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+            Assert.Equal(string.Empty, detailGrid.CurrentCell.Value);
+            var keyArgs = new KeyPressEventArgs('B');
+
+            InvokePrivate(form, "DetailGridKeyPress", detailGrid, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.Equal("B", editBox.Text);
+            Assert.Equal(1, editBox.SelectionStart);
+        });
+    }
+
+    [Fact]
+    public void DetailGridKeyPressDoesNotStartEditorForReadOnlyColumn()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells[0];
+            var keyArgs = new KeyPressEventArgs('A');
+
+            InvokePrivate(form, "DetailGridKeyPress", detailGrid, keyArgs);
+
+            Assert.False(keyArgs.Handled);
+            Assert.Equal(string.Empty, FindExpandedValueEditorTextBox(form).Text);
+        });
+    }
+
+    [Fact]
+    public void DetailGridKeyPressDoesNotInterceptExpandedValueEditor()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateLongDescriptionTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "编辑中";
+            var keyArgs = new KeyPressEventArgs('C');
+
+            InvokePrivate(form, "DetailGridKeyPress", detailGrid, keyArgs);
+
+            Assert.False(keyArgs.Handled);
+            Assert.Equal("编辑中", editBox.Text);
+        });
+    }
+
+    [Fact]
     public void DetailGridShortcutsDoNotInterceptExpandedValueEditor()
     {
         RunOnStaThread(() =>
