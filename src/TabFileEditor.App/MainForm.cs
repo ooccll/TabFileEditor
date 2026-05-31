@@ -11,6 +11,7 @@ public sealed class MainForm : Form
     private const int TopBarHeight = 66;
     private const int ColumnBarHeight = 48;
     private const int BottomBarHeight = 48;
+    private const int SearchControlHeight = 24;
     private const int SaveButtonWidth = 172;
     private const int OpenTableDirectoryButtonWidth = 188;
 
@@ -166,19 +167,29 @@ public sealed class MainForm : Form
         searchBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.Controls.Add(searchBar, 0, 1);
 
-        searchBar.Controls.Add(BuildLabel("搜索"), 0, 0);
-
         _rowSearchTextBox.Name = "RowSearchTextBox";
         _rowSearchTextBox.Dock = DockStyle.Fill;
+        _rowSearchTextBox.Height = SearchControlHeight;
         _rowSearchTextBox.Margin = new Padding(0, 2, 0, 2);
         _rowSearchTextBox.BorderStyle = BorderStyle.FixedSingle;
         _rowSearchTextBox.PlaceholderText = "搜索内容，可用空格隔开多个关键字";
         _rowSearchTextBox.TextChanged += (_, _) => RowSearchTextBoxTextChanged();
+
+        var searchLabel = BuildLabel("搜索");
+        searchLabel.Dock = DockStyle.None;
+        searchLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        searchLabel.Height = SearchControlHeight;
+        searchLabel.Margin = new Padding(0, 2, 0, 2);
+        searchBar.Controls.Add(searchLabel, 0, 0);
         searchBar.Controls.Add(_rowSearchTextBox, 1, 0);
 
         ConfigureButton(_clearSearchButton, "×");
         _clearSearchButton.Name = "ClearSearchButton";
+        _clearSearchButton.Dock = DockStyle.None;
+        _clearSearchButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _clearSearchButton.Height = SearchControlHeight;
         _clearSearchButton.Font = new Font(Font, FontStyle.Bold);
+        _clearSearchButton.Margin = new Padding(4, 2, 0, 2);
         _clearSearchButton.Click += (_, _) => _rowSearchTextBox.Clear();
         searchBar.Controls.Add(_clearSearchButton, 2, 0);
     }
@@ -213,6 +224,7 @@ public sealed class MainForm : Form
         rowListPanel.Controls.Add(BuildDisplayColumnPanel(), 0, 0);
 
         _rowListBox.Dock = DockStyle.Fill;
+        _rowListBox.Margin = Padding.Empty;
         _rowListBox.BorderStyle = BorderStyle.FixedSingle;
         _rowListBox.BackColor = PanelBg;
         _rowListBox.ForeColor = TextColor;

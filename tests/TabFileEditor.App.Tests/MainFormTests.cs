@@ -31,6 +31,8 @@ public sealed class MainFormTests : IDisposable
             form.ClientSize = new Size(1000, 620);
             form.CreateControl();
             form.PerformLayout();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
 
             var root = Assert.IsType<TableLayoutPanel>(Assert.Single(form.Controls.Cast<Control>()));
             Assert.Equal(4, root.RowCount);
@@ -45,21 +47,29 @@ public sealed class MainFormTests : IDisposable
             var rowSearchTextBox = FindRowSearchTextBox(form);
             var clearSearchButton = FindClearSearchButton(form);
             Assert.Equal(3, searchBar.Controls.Count);
-            Assert.Equal("搜索", Assert.IsType<Label>(searchBar.GetControlFromPosition(0, 0)).Text);
+            var searchLabel = Assert.IsType<Label>(searchBar.GetControlFromPosition(0, 0));
+            Assert.Equal("搜索", searchLabel.Text);
             Assert.Same(rowSearchTextBox, searchBar.GetControlFromPosition(1, 0));
             Assert.Same(clearSearchButton, searchBar.GetControlFromPosition(2, 0));
             Assert.Equal("搜索内容，可用空格隔开多个关键字", rowSearchTextBox.PlaceholderText);
             Assert.Equal("×", clearSearchButton.Text);
+            Assert.Equal(rowSearchTextBox.Top, searchLabel.Top);
+            Assert.Equal(rowSearchTextBox.Height, searchLabel.Height);
+            Assert.Equal(rowSearchTextBox.Height, clearSearchButton.Height);
 
             var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
             var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
             Assert.Equal("显示列", Assert.IsType<Label>(displayColumnPanel.GetControlFromPosition(0, 0)).Text);
             Assert.Same(displayColumnComboBox, displayColumnPanel.GetControlFromPosition(1, 0));
-            Assert.NotNull(FindDescendant<ListBox>(splitContainer.Panel1));
+            var rowListBox = FindDescendant<ListBox>(splitContainer.Panel1);
+            Assert.NotNull(rowListBox);
+            Assert.Equal(Padding.Empty, rowListBox.Margin);
+            Assert.Equal(rowListBox.Right, displayColumnComboBox.Right);
 
             var detailGrid = FindDetailGrid(form);
             Assert.False(detailGrid.AllowUserToAddRows);
             Assert.False(detailGrid.RowHeadersVisible);
+            Assert.Equal(detailGrid.Bottom, rowListBox.Bottom);
 
             var openButton = FindButton(form, "打开表格所在目录");
             var saveButton = FindButton(form, "保存");
