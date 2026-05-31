@@ -56,6 +56,8 @@ public sealed class MainFormTests : IDisposable
             Assert.Equal(rowSearchTextBox.Top, searchLabel.Top);
             Assert.Equal(rowSearchTextBox.Height, searchLabel.Height);
             Assert.Equal(rowSearchTextBox.Height, clearSearchButton.Height);
+            Assert.Equal(ContentAlignment.MiddleCenter, clearSearchButton.TextAlign);
+            Assert.Equal(new Padding(0, 0, 0, 2), clearSearchButton.Padding);
 
             var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
             var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
@@ -301,38 +303,50 @@ public sealed class MainFormTests : IDisposable
             const int descriptionRowIndex = 2;
             detailGrid.CurrentCell = detailGrid.Rows[descriptionRowIndex].Cells[valueColumnIndex];
             detailGrid.Size = new Size(700, 460);
+            var cellBounds = detailGrid.GetCellDisplayRectangle(valueColumnIndex, descriptionRowIndex, cutOverflow: false);
+            if (cellBounds.Width <= 0 || cellBounds.Height <= 0)
+            {
+                cellBounds = new Rectangle(
+                    detailGrid.Columns.Cast<DataGridViewColumn>().Take(valueColumnIndex).Sum(column => column.Width),
+                    detailGrid.ColumnHeadersHeight + descriptionRowIndex * detailGrid.Rows[descriptionRowIndex].Height,
+                    detailGrid.Columns[valueColumnIndex].Width,
+                    detailGrid.Rows[descriptionRowIndex].Height);
+            }
 
-            var cellBounds = new Rectangle(220, 70, 420, detailGrid.Rows[descriptionRowIndex].Height);
-            var valueCell = detailGrid.Rows[descriptionRowIndex].Cells[valueColumnIndex];
-            var expandedBounds = valueCell.PositionEditingPanel(
-                cellBounds,
-                cellBounds,
-                detailGrid.DefaultCellStyle,
-                singleVerticalBorderAdded: false,
-                singleHorizontalBorderAdded: false,
-                isFirstDisplayedColumn: false,
-                isFirstDisplayedRow: false);
+            var editArgs = new DataGridViewCellCancelEventArgs(valueColumnIndex, descriptionRowIndex);
+            InvokePrivate(form, "DetailGridCellBeginEdit", detailGrid, editArgs);
 
-            Assert.Equal(cellBounds.Left, expandedBounds.Left);
-            Assert.Equal(cellBounds.Top, expandedBounds.Top);
-            Assert.Equal(cellBounds.Width, expandedBounds.Width);
-            Assert.True(expandedBounds.Height > detailGrid.Rows[descriptionRowIndex].Height);
-            Assert.True(expandedBounds.Bottom <= detailGrid.ClientSize.Height);
+            Assert.True(editArgs.Cancel);
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.Same(detailGrid, editBox.Parent);
+            Assert.Equal(Convert.ToString(detailGrid.CurrentCell.Value), editBox.Text);
+            Assert.Equal(PanelBgForTest(), editBox.BackColor);
+            Assert.NotEqual(Color.Black, editBox.BackColor);
+            Assert.Equal(TextColorForTest(), editBox.ForeColor);
+            Assert.Equal(BorderStyle.FixedSingle, editBox.BorderStyle);
+            Assert.Equal(cellBounds.Left, editBox.Left);
+            Assert.Equal(cellBounds.Top, editBox.Top);
+            Assert.Equal(cellBounds.Width, editBox.Width);
+            Assert.True(editBox.Height > detailGrid.Rows[descriptionRowIndex].Height);
+            Assert.True(editBox.Bottom <= detailGrid.ClientSize.Height);
             Assert.Equal(30, detailGrid.Rows[descriptionRowIndex].Height);
-
-            Assert.True(detailGrid.BeginEdit(selectAll: false));
-            var editBox = Assert.IsAssignableFrom<TextBox>(detailGrid.EditingControl);
-
             Assert.True(editBox.Multiline);
             Assert.True(editBox.WordWrap);
             Assert.Equal(ScrollBars.Vertical, editBox.ScrollBars);
 
-            detailGrid.EndEdit();
+            editBox.Text = "修改后的长内容";
+            InvokePrivate(form, "CommitExpandedValueEditor");
+
+            Assert.Equal(string.Empty, editBox.Text);
+            Assert.Equal("修改后的长内容", detailGrid.Rows[descriptionRowIndex].Cells["Value"].Value);
+            Assert.True(FindButton(form, "保存").Enabled);
+
             detailGrid.CurrentCell = detailGrid.Rows[descriptionRowIndex].Cells[0];
 
             var readOnlyEditArgs = new DataGridViewCellCancelEventArgs(0, descriptionRowIndex);
             InvokePrivate(form, "DetailGridCellBeginEdit", detailGrid, readOnlyEditArgs);
             Assert.True(readOnlyEditArgs.Cancel);
+            Assert.Equal(string.Empty, editBox.Text);
         });
     }
 
@@ -433,6 +447,11 @@ public sealed class MainFormTests : IDisposable
         return FindDescendants<Button>(form).Single(button => button.Name == "ClearSearchButton");
     }
 
+    private static TextBox FindExpandedValueEditorTextBox(Form form)
+    {
+        return FindDescendants<TextBox>(form).Single(textBox => textBox.Name == "ExpandedValueEditorTextBox");
+    }
+
     private static DataGridView FindDetailGrid(Form form)
     {
         var detailGrid = FindDescendant<DataGridView>(form);
@@ -516,5 +535,15 @@ public sealed class MainFormTests : IDisposable
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         return Encoding.GetEncoding("GB18030");
+    }
+
+    private static Color PanelBgForTest()
+    {
+        return Color.White;
+    }
+
+    private static Color TextColorForTest()
+    {
+        return ColorTranslator.FromHtml("#1F2937");
     }
 }
