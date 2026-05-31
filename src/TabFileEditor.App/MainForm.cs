@@ -34,6 +34,7 @@ public sealed class MainForm : Form
     private readonly ComboBox _displayColumnComboBox = new();
     private readonly SplitContainer _splitContainer = new();
     private readonly TextBox _rowSearchTextBox = new();
+    private readonly Button _clearSearchButton = new();
     private readonly ListBox _rowListBox = new();
     private readonly DataGridView _detailGrid = new();
     private readonly Button _openTableDirectoryButton = new();
@@ -154,14 +155,18 @@ public sealed class MainForm : Form
         var searchBar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
+            ColumnCount = 3,
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(10, 0, 10, 8),
         };
+        searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56));
         searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40));
         searchBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.Controls.Add(searchBar, 0, 1);
+
+        searchBar.Controls.Add(BuildLabel("搜索"), 0, 0);
 
         _rowSearchTextBox.Name = "RowSearchTextBox";
         _rowSearchTextBox.Dock = DockStyle.Fill;
@@ -169,7 +174,13 @@ public sealed class MainForm : Form
         _rowSearchTextBox.BorderStyle = BorderStyle.FixedSingle;
         _rowSearchTextBox.PlaceholderText = "搜索内容，可用空格隔开多个关键字";
         _rowSearchTextBox.TextChanged += (_, _) => RowSearchTextBoxTextChanged();
-        searchBar.Controls.Add(_rowSearchTextBox, 0, 0);
+        searchBar.Controls.Add(_rowSearchTextBox, 1, 0);
+
+        ConfigureButton(_clearSearchButton, "×");
+        _clearSearchButton.Name = "ClearSearchButton";
+        _clearSearchButton.Font = new Font(Font, FontStyle.Bold);
+        _clearSearchButton.Click += (_, _) => _rowSearchTextBox.Clear();
+        searchBar.Controls.Add(_clearSearchButton, 2, 0);
     }
 
     private void BuildContent(TableLayoutPanel root)

@@ -43,8 +43,13 @@ public sealed class MainFormTests : IDisposable
             var displayColumnComboBox = FindDisplayColumnComboBox(form);
             Assert.Equal(ComboBoxStyle.DropDownList, displayColumnComboBox.DropDownStyle);
             var rowSearchTextBox = FindRowSearchTextBox(form);
-            Assert.Same(rowSearchTextBox, Assert.Single(searchBar.Controls.Cast<Control>()));
+            var clearSearchButton = FindClearSearchButton(form);
+            Assert.Equal(3, searchBar.Controls.Count);
+            Assert.Equal("搜索", Assert.IsType<Label>(searchBar.GetControlFromPosition(0, 0)).Text);
+            Assert.Same(rowSearchTextBox, searchBar.GetControlFromPosition(1, 0));
+            Assert.Same(clearSearchButton, searchBar.GetControlFromPosition(2, 0));
             Assert.Equal("搜索内容，可用空格隔开多个关键字", rowSearchTextBox.PlaceholderText);
+            Assert.Equal("×", clearSearchButton.Text);
 
             var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
             var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
@@ -173,18 +178,29 @@ public sealed class MainFormTests : IDisposable
             FindFilePathTextBox(form).Text = tablePath;
             InvokePrivate(form, "LoadCurrentFile");
 
-            FindRowSearchTextBox(form).Text = "only path";
+            var rowSearchTextBox = FindRowSearchTextBox(form);
+            rowSearchTextBox.Text = "only path";
 
             var rowListBox = FindDescendant<ListBox>(form);
             Assert.NotNull(rowListBox);
             var item = Assert.Single(rowListBox.Items.Cast<object>());
             Assert.Equal("[2] SecondQuest", item.ToString());
 
-            FindRowSearchTextBox(form).Text = "only missing";
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            Assert.NotEmpty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, valueColumnIndex));
+
+            InvokePrivate(FindClearSearchButton(form), "OnClick", EventArgs.Empty);
+
+            Assert.Equal(string.Empty, rowSearchTextBox.Text);
+            Assert.Equal(2, rowListBox.Items.Count);
+            Assert.Empty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, valueColumnIndex));
+
+            rowSearchTextBox.Text = "only missing";
 
             Assert.Empty(rowListBox.Items.Cast<object>());
 
-            FindRowSearchTextBox(form).Clear();
+            rowSearchTextBox.Clear();
 
             Assert.Equal(2, rowListBox.Items.Count);
         });
@@ -331,6 +347,11 @@ public sealed class MainFormTests : IDisposable
     private static TextBox FindRowSearchTextBox(Form form)
     {
         return FindDescendants<TextBox>(form).Single(textBox => textBox.Name == "RowSearchTextBox");
+    }
+
+    private static Button FindClearSearchButton(Form form)
+    {
+        return FindDescendants<Button>(form).Single(button => button.Name == "ClearSearchButton");
     }
 
     private static DataGridView FindDetailGrid(Form form)
