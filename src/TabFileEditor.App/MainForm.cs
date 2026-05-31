@@ -23,6 +23,7 @@ public sealed class MainForm : Form
     private static readonly Color MutedTextColor = ColorTranslator.FromHtml("#475569");
     private static readonly Color ReadOnlyCellBg = SystemColors.Control;
     private static readonly Color CurrentRowHighlight = ColorTranslator.FromHtml("#D7E9FF");
+    private static readonly Color SearchMatchHighlightColor = ColorTranslator.FromHtml("#FFF2A8");
     private static readonly Color DisabledButtonBg = ColorTranslator.FromHtml("#E5E7EB");
     private static readonly Color DisabledButtonTextColor = ColorTranslator.FromHtml("#8A8A8A");
     private static readonly Color DisabledButtonBorderColor = ColorTranslator.FromHtml("#CBD5E1");
@@ -106,7 +107,7 @@ public sealed class MainForm : Form
         Controls.Add(root);
 
         BuildFileBar(root);
-        BuildColumnBar(root);
+        BuildSearchBar(root);
         BuildContent(root);
         BuildBottomBar(root);
     }
@@ -148,31 +149,27 @@ public sealed class MainForm : Form
         fileBar.Controls.Add(_reloadButton, 3, 0);
     }
 
-    private void BuildColumnBar(TableLayoutPanel root)
+    private void BuildSearchBar(TableLayoutPanel root)
     {
-        var columnBar = new TableLayoutPanel
+        var searchBar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 1,
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(10, 0, 10, 8),
         };
-        columnBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
-        columnBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 360));
-        columnBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        columnBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(columnBar, 0, 1);
+        searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.Controls.Add(searchBar, 0, 1);
 
-        columnBar.Controls.Add(BuildLabel("左侧显示列"), 0, 0);
-
-        _displayColumnComboBox.Name = "DisplayColumnComboBox";
-        _displayColumnComboBox.Dock = DockStyle.Fill;
-        _displayColumnComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        _displayColumnComboBox.Margin = new Padding(0, 2, 0, 2);
-        _displayColumnComboBox.Enabled = false;
-        _displayColumnComboBox.SelectedIndexChanged += (_, _) => DisplayColumnComboBoxSelectedIndexChanged();
-        columnBar.Controls.Add(_displayColumnComboBox, 1, 0);
+        _rowSearchTextBox.Name = "RowSearchTextBox";
+        _rowSearchTextBox.Dock = DockStyle.Fill;
+        _rowSearchTextBox.Margin = new Padding(0, 2, 0, 2);
+        _rowSearchTextBox.BorderStyle = BorderStyle.FixedSingle;
+        _rowSearchTextBox.PlaceholderText = "搜索内容，可用空格隔开多个关键字";
+        _rowSearchTextBox.TextChanged += (_, _) => RowSearchTextBoxTextChanged();
+        searchBar.Controls.Add(_rowSearchTextBox, 0, 0);
     }
 
     private void BuildContent(TableLayoutPanel root)
@@ -202,13 +199,7 @@ public sealed class MainForm : Form
         rowListPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _splitContainer.Panel1.Controls.Add(rowListPanel);
 
-        _rowSearchTextBox.Name = "RowSearchTextBox";
-        _rowSearchTextBox.Dock = DockStyle.Fill;
-        _rowSearchTextBox.Margin = new Padding(0, 0, 0, 6);
-        _rowSearchTextBox.BorderStyle = BorderStyle.FixedSingle;
-        _rowSearchTextBox.PlaceholderText = "搜索左侧列表";
-        _rowSearchTextBox.TextChanged += (_, _) => RenderRows(selectFirstWhenAvailable: true);
-        rowListPanel.Controls.Add(_rowSearchTextBox, 0, 0);
+        rowListPanel.Controls.Add(BuildDisplayColumnPanel(), 0, 0);
 
         _rowListBox.Dock = DockStyle.Fill;
         _rowListBox.BorderStyle = BorderStyle.FixedSingle;
@@ -217,6 +208,33 @@ public sealed class MainForm : Form
         _rowListBox.IntegralHeight = false;
         _rowListBox.SelectedIndexChanged += (_, _) => RenderSelectedRow();
         rowListPanel.Controls.Add(_rowListBox, 0, 1);
+    }
+
+    private TableLayoutPanel BuildDisplayColumnPanel()
+    {
+        var displayColumnPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = WindowBg,
+            Margin = new Padding(0, 0, 0, 6),
+        };
+        displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));
+        displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        displayColumnPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        displayColumnPanel.Controls.Add(BuildLabel("显示列"), 0, 0);
+
+        _displayColumnComboBox.Name = "DisplayColumnComboBox";
+        _displayColumnComboBox.Dock = DockStyle.Fill;
+        _displayColumnComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _displayColumnComboBox.Margin = new Padding(0, 2, 0, 2);
+        _displayColumnComboBox.Enabled = false;
+        _displayColumnComboBox.SelectedIndexChanged += (_, _) => DisplayColumnComboBoxSelectedIndexChanged();
+        displayColumnPanel.Controls.Add(_displayColumnComboBox, 1, 0);
+
+        return displayColumnPanel;
     }
 
     private void ConfigureDetailGrid()
@@ -248,6 +266,7 @@ public sealed class MainForm : Form
         _detailGrid.CellValueChanged += DetailGridCellValueChanged;
         _detailGrid.CellBeginEdit += DetailGridCellBeginEdit;
         _detailGrid.CellEndEdit += DetailGridCellEndEdit;
+        _detailGrid.CellPainting += DetailGridCellPainting;
         _splitContainer.Panel2.Controls.Add(_detailGrid);
     }
 
@@ -390,6 +409,12 @@ public sealed class MainForm : Form
         RenderRows(selectFirstWhenAvailable: true);
     }
 
+    private void RowSearchTextBoxTextChanged()
+    {
+        RenderRows(selectFirstWhenAvailable: true);
+        _detailGrid.Invalidate();
+    }
+
     private void RenderRows(bool selectFirstWhenAvailable, TabTableRow? preferredRow = null)
     {
         if (_loadingRows)
@@ -409,11 +434,11 @@ public sealed class MainForm : Form
                 return;
             }
 
-            var query = _rowSearchTextBox.Text.Trim();
+            var searchKeywords = BuildSearchKeywords(_rowSearchTextBox.Text);
             foreach (var row in _document.DataRows)
             {
                 var item = new RowListItem(row, _document.BuildRowListText(row, _displayColumnIndex));
-                if (query.Length == 0 || item.Text.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (RowMatchesSearch(row, searchKeywords))
                 {
                     _rowListBox.Items.Add(item);
                 }
@@ -449,6 +474,20 @@ public sealed class MainForm : Form
         {
             RenderSelectedRow();
         }
+    }
+
+    private static bool RowMatchesSearch(TabTableRow row, IReadOnlyList<string> searchKeywords)
+    {
+        foreach (var keyword in searchKeywords)
+        {
+            var matched = row.Cells.Any(cell => cell.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+            if (!matched)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void RenderSelectedRow()
@@ -580,6 +619,194 @@ public sealed class MainForm : Form
             _detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
             MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void DetailGridCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        var graphics = e.Graphics;
+        var cellStyle = e.CellStyle;
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || graphics is null || cellStyle is null)
+        {
+            return;
+        }
+
+        var ranges = GetDetailSearchMatchRanges(e.RowIndex, e.ColumnIndex);
+        if (ranges.Count == 0)
+        {
+            return;
+        }
+
+        PaintDetailValueCellWithSearchHighlight(e, graphics, cellStyle, ranges);
+        e.Handled = true;
+    }
+
+    private IReadOnlyList<(int Start, int Length)> GetDetailSearchMatchRanges(int rowIndex, int columnIndex)
+    {
+        if (rowIndex < 0 ||
+            rowIndex >= _detailGrid.Rows.Count ||
+            columnIndex < 0 ||
+            columnIndex >= _detailGrid.Columns.Count ||
+            _detailGrid.Columns[columnIndex].Name != "Value")
+        {
+            return Array.Empty<(int Start, int Length)>();
+        }
+
+        var searchKeywords = BuildSearchKeywords(_rowSearchTextBox.Text);
+        if (searchKeywords.Count == 0)
+        {
+            return Array.Empty<(int Start, int Length)>();
+        }
+
+        var value = Convert.ToString(_detailGrid.Rows[rowIndex].Cells[columnIndex].Value) ?? string.Empty;
+        return FindSearchMatchRanges(value, searchKeywords);
+    }
+
+    private static IReadOnlyList<(int Start, int Length)> FindSearchMatchRanges(
+        string value,
+        IReadOnlyList<string> searchKeywords)
+    {
+        if (value.Length == 0 || searchKeywords.Count == 0)
+        {
+            return Array.Empty<(int Start, int Length)>();
+        }
+
+        var ranges = new List<(int Start, int Length)>();
+        foreach (var keyword in searchKeywords)
+        {
+            var startIndex = 0;
+            while (startIndex < value.Length)
+            {
+                var matchIndex = value.IndexOf(keyword, startIndex, StringComparison.OrdinalIgnoreCase);
+                if (matchIndex < 0)
+                {
+                    break;
+                }
+
+                ranges.Add((matchIndex, keyword.Length));
+                startIndex = matchIndex + Math.Max(keyword.Length, 1);
+            }
+        }
+
+        return ranges
+            .OrderBy(range => range.Start)
+            .ThenByDescending(range => range.Length)
+            .ToList();
+    }
+
+    private void PaintDetailValueCellWithSearchHighlight(
+        DataGridViewCellPaintingEventArgs e,
+        Graphics graphics,
+        DataGridViewCellStyle cellStyle,
+        IReadOnlyList<(int Start, int Length)> ranges)
+    {
+        e.Paint(e.ClipBounds, e.PaintParts & ~DataGridViewPaintParts.ContentForeground);
+
+        var text = Convert.ToString(e.FormattedValue) ?? string.Empty;
+        var textBounds = GetDetailCellTextBounds(e.CellBounds, cellStyle);
+        DrawSearchMatchHighlights(graphics, text, cellStyle.Font ?? Font, textBounds, ranges);
+
+        TextRenderer.DrawText(
+            graphics,
+            text,
+            cellStyle.Font ?? Font,
+            textBounds,
+            cellStyle.ForeColor,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+    }
+
+    private static Rectangle GetDetailCellTextBounds(Rectangle cellBounds, DataGridViewCellStyle cellStyle)
+    {
+        var padding = cellStyle.Padding;
+        return new Rectangle(
+            cellBounds.Left + padding.Left + 4,
+            cellBounds.Top + padding.Top + 2,
+            Math.Max(0, cellBounds.Width - padding.Horizontal - 8),
+            Math.Max(0, cellBounds.Height - padding.Vertical - 4));
+    }
+
+    private static void DrawSearchMatchHighlights(
+        Graphics graphics,
+        string text,
+        Font font,
+        Rectangle textBounds,
+        IReadOnlyList<(int Start, int Length)> ranges)
+    {
+        if (text.Length == 0 || ranges.Count == 0 || textBounds.Width <= 0 || textBounds.Height <= 0)
+        {
+            return;
+        }
+
+        using var brush = new SolidBrush(SearchMatchHighlightColor);
+        foreach (var range in ranges)
+        {
+            if (range.Start < 0 || range.Length <= 0 || range.Start >= text.Length)
+            {
+                continue;
+            }
+
+            var safeLength = Math.Min(range.Length, text.Length - range.Start);
+            var before = text[..range.Start];
+            var match = text.Substring(range.Start, safeLength);
+            var x = textBounds.Left + MeasureDetailTextWidth(graphics, before, font);
+            var width = Math.Max(2, MeasureDetailTextWidth(graphics, match, font));
+            var highlightBounds = new Rectangle(
+                x,
+                textBounds.Top + 2,
+                Math.Min(width, Math.Max(0, textBounds.Right - x)),
+                Math.Max(0, textBounds.Height - 4));
+            if (highlightBounds.Width > 0 && highlightBounds.Height > 0)
+            {
+                graphics.FillRectangle(brush, highlightBounds);
+            }
+        }
+    }
+
+    private static int MeasureDetailTextWidth(Graphics graphics, string text, Font font)
+    {
+        if (text.Length == 0)
+        {
+            return 0;
+        }
+
+        return TextRenderer.MeasureText(
+            graphics,
+            text,
+            font,
+            Size.Empty,
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width;
+    }
+
+    private static IReadOnlyList<string> BuildSearchKeywords(string searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return Array.Empty<string>();
+        }
+
+        var keywords = new List<string>();
+        var startIndex = -1;
+        for (var index = 0; index < searchText.Length; index++)
+        {
+            if (char.IsWhiteSpace(searchText[index]))
+            {
+                if (startIndex >= 0)
+                {
+                    keywords.Add(searchText[startIndex..index]);
+                    startIndex = -1;
+                }
+            }
+            else if (startIndex < 0)
+            {
+                startIndex = index;
+            }
+        }
+
+        if (startIndex >= 0)
+        {
+            keywords.Add(searchText[startIndex..]);
+        }
+
+        return keywords;
     }
 
     private void SaveCurrentFile(bool showSuccessMessage)

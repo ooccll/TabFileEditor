@@ -35,14 +35,21 @@ public sealed class MainFormTests : IDisposable
             var root = Assert.IsType<TableLayoutPanel>(Assert.Single(form.Controls.Cast<Control>()));
             Assert.Equal(4, root.RowCount);
             Assert.IsType<TableLayoutPanel>(root.GetControlFromPosition(0, 0));
-            Assert.IsType<TableLayoutPanel>(root.GetControlFromPosition(0, 1));
+            var searchBar = Assert.IsType<TableLayoutPanel>(root.GetControlFromPosition(0, 1));
             var splitContainer = Assert.IsType<SplitContainer>(root.GetControlFromPosition(0, 2));
             var bottomBar = Assert.IsType<TableLayoutPanel>(root.GetControlFromPosition(0, 3));
 
             Assert.Equal("FilePathTextBox", FindFilePathTextBox(form).Name);
             var displayColumnComboBox = FindDisplayColumnComboBox(form);
             Assert.Equal(ComboBoxStyle.DropDownList, displayColumnComboBox.DropDownStyle);
-            Assert.Equal("RowSearchTextBox", FindRowSearchTextBox(form).Name);
+            var rowSearchTextBox = FindRowSearchTextBox(form);
+            Assert.Same(rowSearchTextBox, Assert.Single(searchBar.Controls.Cast<Control>()));
+            Assert.Equal("搜索内容，可用空格隔开多个关键字", rowSearchTextBox.PlaceholderText);
+
+            var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
+            var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
+            Assert.Equal("显示列", Assert.IsType<Label>(displayColumnPanel.GetControlFromPosition(0, 0)).Text);
+            Assert.Same(displayColumnComboBox, displayColumnPanel.GetControlFromPosition(1, 0));
             Assert.NotNull(FindDescendant<ListBox>(splitContainer.Panel1));
 
             var detailGrid = FindDetailGrid(form);
@@ -126,7 +133,7 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
-    public void SearchFiltersLeftRowList()
+    public void SearchFiltersLeftRowListByAnyCellValueAndAllKeywords()
     {
         RunOnStaThread(() =>
         {
@@ -136,12 +143,56 @@ public sealed class MainFormTests : IDisposable
             FindFilePathTextBox(form).Text = tablePath;
             InvokePrivate(form, "LoadCurrentFile");
 
-            FindRowSearchTextBox(form).Text = "second";
+            FindRowSearchTextBox(form).Text = "only path";
 
             var rowListBox = FindDescendant<ListBox>(form);
             Assert.NotNull(rowListBox);
             var item = Assert.Single(rowListBox.Items.Cast<object>());
             Assert.Equal("[2] SecondQuest", item.ToString());
+
+            FindRowSearchTextBox(form).Text = "only missing";
+
+            Assert.Empty(rowListBox.Items.Cast<object>());
+
+            FindRowSearchTextBox(form).Clear();
+
+            Assert.Equal(2, rowListBox.Items.Count);
+        });
+    }
+
+    [Fact]
+    public void DetailGridReportsSearchMatchRangesOnlyForValueColumn()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            FindRowSearchTextBox(form).Text = "first path";
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            rowListBox.SelectedIndex = 0;
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            var columnIndexColumnIndex = detailGrid.Columns["ColumnIndex"]!.Index;
+            var pathValue = Assert.IsType<string>(detailGrid.Rows[2].Cells["Value"].Value);
+            var pathStart = pathValue.IndexOf("path", StringComparison.OrdinalIgnoreCase);
+
+            var nameRanges = GetDetailSearchMatchRanges(form, detailRowIndex: 1, valueColumnIndex);
+            var pathRanges = GetDetailSearchMatchRanges(form, detailRowIndex: 2, valueColumnIndex);
+
+            Assert.Contains(("FirstQuest".IndexOf("first", StringComparison.OrdinalIgnoreCase), "first".Length), nameRanges);
+            Assert.Contains((pathStart, "path".Length), pathRanges);
+            Assert.Empty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, columnIndexColumnIndex));
+
+            FindRowSearchTextBox(form).Clear();
+
+            Assert.Empty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, valueColumnIndex));
         });
     }
 
@@ -181,8 +232,8 @@ public sealed class MainFormTests : IDisposable
         {
             "ID\tQuestName\tDesc",
             "int\tstring\tstring",
-            "1\tFirstQuest\t第一条",
-            "2\tSecondQuest\t第二条",
+            "1\tFirstQuest\tAlphaPath说明",
+            "2\tSecondQuest\tOnlyMatchedByPath",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;
@@ -257,6 +308,27 @@ public sealed class MainFormTests : IDisposable
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
         method.Invoke(target, args);
+    }
+
+    private static IReadOnlyList<(int Start, int Length)> GetDetailSearchMatchRanges(
+        Form form,
+        int detailRowIndex,
+        int detailColumnIndex)
+    {
+        return InvokePrivate<IReadOnlyList<(int Start, int Length)>>(
+            form,
+            "GetDetailSearchMatchRanges",
+            detailRowIndex,
+            detailColumnIndex);
+    }
+
+    private static T InvokePrivate<T>(object target, string methodName, params object[] args)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsAssignableFrom<T>(method.Invoke(target, args));
     }
 
     private static TControl? FindDescendant<TControl>(Control parent)
