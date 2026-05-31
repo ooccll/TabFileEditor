@@ -96,6 +96,36 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void LoadingFileWithIdZeroShowsZeroRowAndUsesRowsAboveItAsReadOnlyPreamble()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateIdZeroTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            Assert.Collection(
+                rowListBox.Items.Cast<object>().Select(item => item.ToString()),
+                item => Assert.Equal("[0] DefaultQuest", item),
+                item => Assert.Equal("[1] FirstQuest", item));
+            Assert.Equal(0, rowListBox.SelectedIndex);
+
+            var detailGrid = FindDetailGrid(form);
+            Assert.Equal(4, detailGrid.Columns.Count);
+            Assert.Equal("第1行", detailGrid.Columns[1].HeaderText);
+            Assert.Equal("第2行", detailGrid.Columns[2].HeaderText);
+            Assert.Equal("Name", detailGrid.Rows[1].Cells[1].Value);
+            Assert.Equal("string", detailGrid.Rows[1].Cells[2].Value);
+            Assert.Equal("DefaultQuest", detailGrid.Rows[1].Cells[3].Value);
+        });
+    }
+
+    [Fact]
     public void SearchFiltersLeftRowList()
     {
         RunOnStaThread(() =>
@@ -153,6 +183,20 @@ public sealed class MainFormTests : IDisposable
             "int\tstring\tstring",
             "1\tFirstQuest\t第一条",
             "2\tSecondQuest\t第二条",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateIdZeroTable()
+    {
+        var path = Path.Combine(_tempDir, "ZeroQuestTab.xls");
+        var lines = new[]
+        {
+            "ID\tName\tDesc",
+            "int\tstring\tstring",
+            "0\tDefaultQuest\t默认行",
+            "1\tFirstQuest\t第一条",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;

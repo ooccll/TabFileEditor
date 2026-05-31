@@ -51,6 +51,51 @@ public sealed class TabTableDocumentTests : IDisposable
     }
 
     [Fact]
+    public void UsesFirstNumericIdRowAsDataStartWhenIdZeroExists()
+    {
+        var path = Path.Combine(_tempDir, "ZeroId.tab");
+        CreateTextTable(
+            path,
+            ["ID", "Name", "Desc"],
+            ["int", "string", "string"],
+            ["0", "DefaultQuest", "默认行"],
+            ["1", "FirstQuest", "第一条"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.True(table.HasIdColumn);
+        Assert.Equal(2, table.DataStartRowIndex);
+        Assert.Collection(
+            table.PreambleRows,
+            row => Assert.Equal("ID", row.Cells[0]),
+            row => Assert.Equal("int", row.Cells[0]));
+        Assert.Collection(
+            table.DataRows,
+            row => Assert.Equal("0", row.Cells[0]),
+            row => Assert.Equal("1", row.Cells[0]));
+    }
+
+    [Fact]
+    public void UsesFirstNumericIdRowEvenWhenItIsNotZeroOrOne()
+    {
+        var path = Path.Combine(_tempDir, "HighId.tab");
+        CreateTextTable(
+            path,
+            ["ID", "Name"],
+            ["int", "string"],
+            ["100", "Hundred"],
+            ["101", "HundredOne"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.Equal(2, table.DataStartRowIndex);
+        Assert.Collection(
+            table.DataRows,
+            row => Assert.Equal("100", row.Cells[0]),
+            row => Assert.Equal("101", row.Cells[0]));
+    }
+
+    [Fact]
     public void DefaultsToFirstColumnWhenNoNameColumnExists()
     {
         var path = Path.Combine(_tempDir, "NoName.tab");

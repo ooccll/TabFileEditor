@@ -172,12 +172,6 @@ public sealed class TabTableDocument
 
     private static int FindDataStartRowIndex(IReadOnlyList<TabTableRow> rows)
     {
-        var firstIdOneRow = rows.FirstOrDefault(row => string.Equals(GetCellValue(row, 0).Trim(), "1", StringComparison.Ordinal));
-        if (firstIdOneRow is not null)
-        {
-            return firstIdOneRow.RowIndex;
-        }
-
         var firstNumericIdRow = rows.FirstOrDefault(row =>
             long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out _));
         return firstNumericIdRow?.RowIndex ?? 0;
