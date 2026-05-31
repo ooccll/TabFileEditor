@@ -1,0 +1,295 @@
+using System.Globalization;
+using System.Text;
+
+namespace FillTabTable.Core;
+
+public sealed class TabTableDocument
+{
+    private const int InspectRowCount = 10;
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+    private readonly Encoding _encoding;
+    private readonly string _newline;
+    private readonly bool _hasFinalNewline;
+    private readonly List<TabTableRow> _rows;
+
+    private TabTableDocument(
+        string path,
+        Encoding encoding,
+        string newline,
+        bool hasFinalNewline,
+        List<TabTableRow> rows,
+        IReadOnlyList<TabTableColumn> columns,
+        bool hasIdColumn,
+        int dataStartRowIndex,
+        int recommendedDisplayColumnIndex)
+    {
+        Path = path;
+        _encoding = encoding;
+        _newline = newline;
+        _hasFinalNewline = hasFinalNewline;
+        _rows = rows;
+        Rows = _rows;
+        Columns = columns;
+        HasIdColumn = hasIdColumn;
+        DataStartRowIndex = dataStartRowIndex;
+        RecommendedDisplayColumnIndex = recommendedDisplayColumnIndex;
+        PreambleRows = hasIdColumn && dataStartRowIndex > 0
+            ? _rows.Take(dataStartRowIndex).ToList()
+            : [];
+        DataRows = hasIdColumn
+            ? _rows.Skip(dataStartRowIndex).ToList()
+            : _rows.ToList();
+    }
+
+    public string Path { get; }
+
+    public IReadOnlyList<TabTableColumn> Columns { get; }
+
+    public IReadOnlyList<TabTableRow> Rows { get; }
+
+    public IReadOnlyList<TabTableRow> PreambleRows { get; }
+
+    public IReadOnlyList<TabTableRow> DataRows { get; }
+
+    public bool HasIdColumn { get; }
+
+    public int DataStartRowIndex { get; }
+
+    public int RecommendedDisplayColumnIndex { get; }
+
+    public string DisplayName => System.IO.Path.GetFileName(Path);
+
+    public static TabTableDocument Load(string path)
+    {
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("未找到 tab 表格文件。", path);
+        }
+
+        var bytes = File.ReadAllBytes(path);
+        var (encoding, text) = DecodeText(bytes);
+        var newline = DetectNewline(text);
+        var hasFinalNewline = EndsWithNewline(text);
+        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (hasFinalNewline && normalized.Length > 0)
+        {
+            normalized = normalized[..^1];
+        }
+
+        var rows = normalized.Length == 0
+            ? []
+            : normalized
+                .Split('\n')
+                .Select((line, index) => new TabTableRow(index, line.Split('\t')))
+                .ToList();
+        var columnCount = rows.Count == 0 ? 0 : rows.Max(row => row.Cells.Count);
+        var columns = BuildColumns(rows, columnCount);
+        var hasIdColumn = HasFirstColumnIdHeader(rows);
+        var dataStartRowIndex = hasIdColumn ? FindDataStartRowIndex(rows) : 0;
+        var recommendedDisplayColumnIndex = FindRecommendedDisplayColumnIndex(rows, columnCount);
+
+        return new TabTableDocument(
+            path,
+            encoding,
+            newline,
+            hasFinalNewline,
+            rows,
+            columns,
+            hasIdColumn,
+            dataStartRowIndex,
+            recommendedDisplayColumnIndex);
+    }
+
+    public void SetCellValue(TabTableRow row, int columnIndex, string value)
+    {
+        if (!_rows.Any(current => ReferenceEquals(current, row)))
+        {
+            throw new ArgumentException("行不属于当前 tab 表。", nameof(row));
+        }
+
+        ValidateCellValue(value);
+        EnsureCellExists(row, columnIndex);
+        row.Cells[columnIndex] = value;
+    }
+
+    public void Save()
+    {
+        var lines = _rows.Select(row => string.Join('\t', row.Cells));
+        var text = string.Join(_newline, lines);
+        if (_hasFinalNewline)
+        {
+            text += _newline;
+        }
+
+        File.WriteAllText(Path, text, _encoding);
+    }
+
+    public string BuildRowListText(TabTableRow row, int displayColumnIndex)
+    {
+        var value = GetCellValue(row, displayColumnIndex).Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            value = $"第{row.RowIndex + 1}行";
+        }
+
+        if (!HasIdColumn || !long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+        {
+            return value;
+        }
+
+        return string.IsNullOrEmpty(value) ? $"[{id}]" : $"[{id}] {value}";
+    }
+
+    public static string GetCellValue(TabTableRow row, int columnIndex)
+    {
+        return columnIndex >= 0 && columnIndex < row.Cells.Count ? row.Cells[columnIndex] : string.Empty;
+    }
+
+    private static IReadOnlyList<TabTableColumn> BuildColumns(IReadOnlyList<TabTableRow> rows, int columnCount)
+    {
+        var inspectedRows = rows.Take(InspectRowCount).ToList();
+        var columns = new List<TabTableColumn>();
+        for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+        {
+            var title = inspectedRows
+                .Select(row => GetCellValue(row, columnIndex).Trim())
+                .FirstOrDefault(value => value.Length > 0);
+            columns.Add(new TabTableColumn(columnIndex, string.IsNullOrEmpty(title) ? $"第{columnIndex + 1}列" : title));
+        }
+
+        return columns;
+    }
+
+    private static bool HasFirstColumnIdHeader(IReadOnlyList<TabTableRow> rows)
+    {
+        return rows
+            .Take(InspectRowCount)
+            .Select(row => GetCellValue(row, 0))
+            .Any(value => value.Contains("ID", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int FindDataStartRowIndex(IReadOnlyList<TabTableRow> rows)
+    {
+        var firstIdOneRow = rows.FirstOrDefault(row => string.Equals(GetCellValue(row, 0).Trim(), "1", StringComparison.Ordinal));
+        if (firstIdOneRow is not null)
+        {
+            return firstIdOneRow.RowIndex;
+        }
+
+        var firstNumericIdRow = rows.FirstOrDefault(row =>
+            long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out _));
+        return firstNumericIdRow?.RowIndex ?? 0;
+    }
+
+    private static int FindRecommendedDisplayColumnIndex(IReadOnlyList<TabTableRow> rows, int columnCount)
+    {
+        for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+        {
+            var hasName = rows
+                .Take(InspectRowCount)
+                .Select(row => GetCellValue(row, columnIndex))
+                .Any(value => value.Contains("Name", StringComparison.OrdinalIgnoreCase));
+            if (hasName)
+            {
+                return columnIndex;
+            }
+        }
+
+        return 0;
+    }
+
+    private static void EnsureCellExists(TabTableRow row, int columnIndex)
+    {
+        if (columnIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(columnIndex), "列索引不能小于 0。");
+        }
+
+        while (row.Cells.Count <= columnIndex)
+        {
+            row.Cells.Add(string.Empty);
+        }
+    }
+
+    private static void ValidateCellValue(string value)
+    {
+        if (value.Contains('\t') || value.Contains('\r') || value.Contains('\n'))
+        {
+            throw new ArgumentException("单元格内容不能包含制表符或换行。", nameof(value));
+        }
+    }
+
+    private static (Encoding Encoding, string Text) DecodeText(byte[] bytes)
+    {
+        if (StartsWith(bytes, Encoding.UTF8.GetPreamble()))
+        {
+            return (Encoding.UTF8, Encoding.UTF8.GetString(bytes));
+        }
+
+        if (StartsWith(bytes, Encoding.Unicode.GetPreamble()))
+        {
+            return (Encoding.Unicode, Encoding.Unicode.GetString(bytes));
+        }
+
+        if (StartsWith(bytes, Encoding.BigEndianUnicode.GetPreamble()))
+        {
+            return (Encoding.BigEndianUnicode, Encoding.BigEndianUnicode.GetString(bytes));
+        }
+
+        try
+        {
+            return (Utf8NoBom, StrictUtf8.GetString(bytes));
+        }
+        catch (DecoderFallbackException)
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            var gb18030 = Encoding.GetEncoding("GB18030");
+            return (gb18030, gb18030.GetString(bytes));
+        }
+    }
+
+    private static bool StartsWith(byte[] bytes, byte[] prefix)
+    {
+        if (prefix.Length == 0 || bytes.Length < prefix.Length)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < prefix.Length; index++)
+        {
+            if (bytes[index] != prefix[index])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string DetectNewline(string text)
+    {
+        if (text.Contains("\r\n", StringComparison.Ordinal))
+        {
+            return "\r\n";
+        }
+
+        if (text.Contains('\n'))
+        {
+            return "\n";
+        }
+
+        if (text.Contains('\r'))
+        {
+            return "\r";
+        }
+
+        return Environment.NewLine;
+    }
+
+    private static bool EndsWithNewline(string text)
+    {
+        return text.EndsWith('\n') || text.EndsWith('\r');
+    }
+}
