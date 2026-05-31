@@ -303,44 +303,32 @@ public sealed class MainFormTests : IDisposable
             detailGrid.Size = new Size(700, 460);
 
             var cellBounds = new Rectangle(220, 70, 420, detailGrid.Rows[descriptionRowIndex].Height);
+            var valueCell = detailGrid.Rows[descriptionRowIndex].Cells[valueColumnIndex];
+            var expandedBounds = valueCell.PositionEditingPanel(
+                cellBounds,
+                cellBounds,
+                detailGrid.DefaultCellStyle,
+                singleVerticalBorderAdded: false,
+                singleHorizontalBorderAdded: false,
+                isFirstDisplayedColumn: false,
+                isFirstDisplayedRow: false);
 
-            var editBox = new TextBox
-            {
-                Text = Convert.ToString(detailGrid.CurrentCell.Value) ?? string.Empty,
-                Font = detailGrid.Font,
-                Bounds = cellBounds,
-            };
-            InvokePrivate(
-                form,
-                "DetailGridEditingControlShowing",
-                detailGrid,
-                new DataGridViewEditingControlShowingEventArgs(editBox, detailGrid.DefaultCellStyle));
+            Assert.Equal(cellBounds.Left, expandedBounds.Left);
+            Assert.Equal(cellBounds.Top, expandedBounds.Top);
+            Assert.Equal(cellBounds.Width, expandedBounds.Width);
+            Assert.True(expandedBounds.Height > detailGrid.Rows[descriptionRowIndex].Height);
+            Assert.True(expandedBounds.Bottom <= detailGrid.ClientSize.Height);
+            Assert.Equal(30, detailGrid.Rows[descriptionRowIndex].Height);
+
+            Assert.True(detailGrid.BeginEdit(selectAll: false));
+            var editBox = Assert.IsAssignableFrom<TextBox>(detailGrid.EditingControl);
 
             Assert.True(editBox.Multiline);
             Assert.True(editBox.WordWrap);
             Assert.Equal(ScrollBars.Vertical, editBox.ScrollBars);
-            Assert.True(editBox.Height > detailGrid.Rows[descriptionRowIndex].Height);
-            Assert.True(editBox.Bottom <= detailGrid.ClientSize.Height);
-            Assert.Equal(30, detailGrid.Rows[descriptionRowIndex].Height);
 
+            detailGrid.EndEdit();
             detailGrid.CurrentCell = detailGrid.Rows[descriptionRowIndex].Cells[0];
-            var readOnlyEditBox = new TextBox
-            {
-                Multiline = true,
-                WordWrap = true,
-                ScrollBars = ScrollBars.Vertical,
-                Font = detailGrid.Font,
-                Bounds = cellBounds,
-            };
-            InvokePrivate(
-                form,
-                "DetailGridEditingControlShowing",
-                detailGrid,
-                new DataGridViewEditingControlShowingEventArgs(readOnlyEditBox, detailGrid.DefaultCellStyle));
-
-            Assert.False(readOnlyEditBox.Multiline);
-            Assert.False(readOnlyEditBox.WordWrap);
-            Assert.Equal(ScrollBars.None, readOnlyEditBox.ScrollBars);
 
             var readOnlyEditArgs = new DataGridViewCellCancelEventArgs(0, descriptionRowIndex);
             InvokePrivate(form, "DetailGridCellBeginEdit", detailGrid, readOnlyEditArgs);

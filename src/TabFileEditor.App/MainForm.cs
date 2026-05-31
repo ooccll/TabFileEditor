@@ -292,7 +292,6 @@ public sealed class MainForm : Form
         _detailGrid.CellValueChanged += DetailGridCellValueChanged;
         _detailGrid.CellBeginEdit += DetailGridCellBeginEdit;
         _detailGrid.CellEndEdit += DetailGridCellEndEdit;
-        _detailGrid.EditingControlShowing += DetailGridEditingControlShowing;
         _detailGrid.CellPainting += DetailGridCellPainting;
         _splitContainer.Panel2.Controls.Add(_detailGrid);
     }
@@ -581,6 +580,7 @@ public sealed class MainForm : Form
             MinimumWidth = 180,
             ReadOnly = false,
             SortMode = DataGridViewColumnSortMode.NotSortable,
+            CellTemplate = new ExpandedValueTextBoxCell(),
         };
         valueColumn.DefaultCellStyle.BackColor = PanelBg;
         _detailGrid.Columns.Add(valueColumn);
@@ -615,118 +615,6 @@ public sealed class MainForm : Form
         _detailGrid.Rows[e.RowIndex].ErrorText = string.Empty;
     }
 
-    private void DetailGridEditingControlShowing(object? sender, DataGridViewEditingControlShowingEventArgs e)
-    {
-        if (e.Control is not TextBox editingTextBox)
-        {
-            return;
-        }
-
-        if (!IsCurrentDetailValueCell())
-        {
-            ResetValueEditingTextBox(editingTextBox);
-            return;
-        }
-
-        ConfigureExpandedValueEditor(editingTextBox);
-    }
-
-    private bool IsCurrentDetailValueCell()
-    {
-        var currentCell = _detailGrid.CurrentCell;
-        return currentCell is not null &&
-            currentCell.ColumnIndex >= 0 &&
-            currentCell.ColumnIndex < _detailGrid.Columns.Count &&
-            _detailGrid.Columns[currentCell.ColumnIndex].Name == "Value";
-    }
-
-    private void ConfigureExpandedValueEditor(TextBox editingTextBox)
-    {
-        var originalBounds = GetValueEditorBounds(editingTextBox);
-        var requiredHeight = CalculateExpandedValueEditorRequiredHeight(
-            editingTextBox.Text,
-            editingTextBox.Font,
-            originalBounds.Width);
-        var expandedHeight = CalculateExpandedValueEditorHeight(originalBounds, requiredHeight);
-        var expandedBounds = new Rectangle(
-            originalBounds.Left,
-            originalBounds.Top,
-            originalBounds.Width,
-            expandedHeight);
-
-        editingTextBox.Multiline = true;
-        editingTextBox.WordWrap = true;
-        editingTextBox.AcceptsReturn = false;
-        editingTextBox.AcceptsTab = false;
-        editingTextBox.ScrollBars = requiredHeight > expandedHeight ? ScrollBars.Vertical : ScrollBars.None;
-        ApplyExpandedValueEditorBounds(editingTextBox, expandedBounds);
-        editingTextBox.BringToFront();
-    }
-
-    private Rectangle GetValueEditorBounds(TextBox editingTextBox)
-    {
-        if (editingTextBox.Bounds.Width > 0 && editingTextBox.Bounds.Height > 0)
-        {
-            return editingTextBox.Bounds;
-        }
-
-        var currentCell = _detailGrid.CurrentCell;
-        if (currentCell is null)
-        {
-            return new Rectangle(0, 0, Math.Max(1, editingTextBox.Width), DetailGridRowHeight);
-        }
-
-        var cellBounds = _detailGrid.GetCellDisplayRectangle(
-            currentCell.ColumnIndex,
-            currentCell.RowIndex,
-            cutOverflow: false);
-        return cellBounds.Width > 0 && cellBounds.Height > 0
-            ? cellBounds
-            : new Rectangle(0, 0, Math.Max(1, editingTextBox.Width), DetailGridRowHeight);
-    }
-
-    private int CalculateExpandedValueEditorHeight(Rectangle originalBounds, int requiredHeight)
-    {
-        var availableHeight = Math.Max(
-            originalBounds.Height,
-            _detailGrid.ClientSize.Height - originalBounds.Top - ExpandedValueEditorBottomMargin);
-        return Math.Clamp(requiredHeight, originalBounds.Height, availableHeight);
-    }
-
-    private static int CalculateExpandedValueEditorRequiredHeight(string text, Font font, int editorWidth)
-    {
-        var measureText = string.IsNullOrEmpty(text) ? " " : text;
-        var measureWidth = Math.Max(1, editorWidth - ExpandedValueEditorPadding);
-        var measured = TextRenderer.MeasureText(
-            measureText,
-            font,
-            new Size(measureWidth, 10000),
-            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
-        return Math.Max(DetailGridRowHeight, measured.Height + ExpandedValueEditorPadding);
-    }
-
-    private void ApplyExpandedValueEditorBounds(TextBox editingTextBox, Rectangle expandedBounds)
-    {
-        if (editingTextBox.Parent is Control parent && !ReferenceEquals(parent, _detailGrid))
-        {
-            parent.Bounds = expandedBounds;
-            editingTextBox.Bounds = new Rectangle(0, 0, expandedBounds.Width, expandedBounds.Height);
-            parent.BringToFront();
-            return;
-        }
-
-        editingTextBox.Bounds = expandedBounds;
-    }
-
-    private static void ResetValueEditingTextBox(TextBox editingTextBox)
-    {
-        editingTextBox.Multiline = false;
-        editingTextBox.WordWrap = false;
-        editingTextBox.AcceptsReturn = false;
-        editingTextBox.AcceptsTab = false;
-        editingTextBox.ScrollBars = ScrollBars.None;
-    }
-
     private void DetailGridCellValueChanged(object? sender, DataGridViewCellEventArgs e)
     {
         if (_loadingDetails ||
@@ -755,6 +643,18 @@ public sealed class MainForm : Form
             _detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
             MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private static int CalculateExpandedValueEditorRequiredHeight(string text, Font font, int editorWidth)
+    {
+        var measureText = string.IsNullOrEmpty(text) ? " " : text;
+        var measureWidth = Math.Max(1, editorWidth - ExpandedValueEditorPadding);
+        var measured = TextRenderer.MeasureText(
+            measureText,
+            font,
+            new Size(measureWidth, 10000),
+            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
+        return Math.Max(DetailGridRowHeight, measured.Height + ExpandedValueEditorPadding);
     }
 
     private void DetailGridCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
@@ -1160,6 +1060,106 @@ public sealed class MainForm : Form
         public override string ToString()
         {
             return $"第{Column.Index + 1}列 - {Column.Title}";
+        }
+    }
+
+    private sealed class ExpandedValueTextBoxCell : DataGridViewTextBoxCell
+    {
+        public override void InitializeEditingControl(
+            int rowIndex,
+            object? initialFormattedValue,
+            DataGridViewCellStyle dataGridViewCellStyle)
+        {
+            base.InitializeEditingControl(rowIndex, initialFormattedValue, dataGridViewCellStyle);
+
+            if (DataGridView?.EditingControl is TextBox editingTextBox)
+            {
+                ConfigureValueEditingTextBox(editingTextBox, CalculateScrollBars(rowIndex, dataGridViewCellStyle));
+            }
+        }
+
+        public override Rectangle PositionEditingPanel(
+            Rectangle cellBounds,
+            Rectangle cellClip,
+            DataGridViewCellStyle cellStyle,
+            bool singleVerticalBorderAdded,
+            bool singleHorizontalBorderAdded,
+            bool isFirstDisplayedColumn,
+            bool isFirstDisplayedRow)
+        {
+            var editorBounds = cellBounds.Width > 0 && cellBounds.Height > 0
+                ? cellBounds
+                : base.PositionEditingPanel(
+                    cellBounds,
+                    cellClip,
+                    cellStyle,
+                    singleVerticalBorderAdded,
+                    singleHorizontalBorderAdded,
+                    isFirstDisplayedColumn,
+                    isFirstDisplayedRow);
+            var requiredHeight = CalculateExpandedValueEditorRequiredHeight(
+                Convert.ToString(FormattedValue) ?? string.Empty,
+                cellStyle.Font ?? DataGridView?.Font ?? Control.DefaultFont,
+                editorBounds.Width);
+            var expandedHeight = CalculateExpandedValueEditorHeight(editorBounds, requiredHeight);
+            var scrollBars = requiredHeight > expandedHeight ? ScrollBars.Vertical : ScrollBars.None;
+
+            if (DataGridView?.EditingControl is TextBox editingTextBox)
+            {
+                ConfigureValueEditingTextBox(editingTextBox, scrollBars);
+            }
+
+            return new Rectangle(
+                editorBounds.Left,
+                editorBounds.Top,
+                editorBounds.Width,
+                expandedHeight);
+        }
+
+        private int CalculateExpandedValueEditorHeight(Rectangle editorBounds, int requiredHeight)
+        {
+            var availableHeight = DataGridView is null
+                ? requiredHeight
+                : Math.Max(
+                    editorBounds.Height,
+                    DataGridView.ClientSize.Height - editorBounds.Top - ExpandedValueEditorBottomMargin);
+            return Math.Clamp(requiredHeight, editorBounds.Height, availableHeight);
+        }
+
+        private ScrollBars CalculateScrollBars(int rowIndex, DataGridViewCellStyle cellStyle)
+        {
+            var dataGridView = DataGridView;
+            if (dataGridView is null)
+            {
+                return ScrollBars.None;
+            }
+
+            var editorBounds = dataGridView.GetCellDisplayRectangle(ColumnIndex, rowIndex, cutOverflow: false);
+            if (editorBounds.Width <= 0 || editorBounds.Height <= 0)
+            {
+                editorBounds = new Rectangle(
+                    0,
+                    0,
+                    Math.Max(1, OwningColumn?.Width ?? dataGridView.ClientSize.Width),
+                    DetailGridRowHeight);
+            }
+
+            var requiredHeight = CalculateExpandedValueEditorRequiredHeight(
+                Convert.ToString(FormattedValue) ?? string.Empty,
+                cellStyle.Font ?? dataGridView.Font,
+                editorBounds.Width);
+            return requiredHeight > CalculateExpandedValueEditorHeight(editorBounds, requiredHeight)
+                ? ScrollBars.Vertical
+                : ScrollBars.None;
+        }
+
+        private static void ConfigureValueEditingTextBox(TextBox editingTextBox, ScrollBars scrollBars)
+        {
+            editingTextBox.Multiline = true;
+            editingTextBox.WordWrap = true;
+            editingTextBox.AcceptsReturn = false;
+            editingTextBox.AcceptsTab = false;
+            editingTextBox.ScrollBars = scrollBars;
         }
     }
 
