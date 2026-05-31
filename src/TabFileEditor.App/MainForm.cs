@@ -162,12 +162,11 @@ public sealed class MainForm : Form
         var searchBar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 1,
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(10, 0, 10, 8),
         };
-        searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56));
         searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         searchBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.Controls.Add(searchBar, 0, 1);
@@ -180,13 +179,7 @@ public sealed class MainForm : Form
         _rowSearchTextBox.PlaceholderText = "搜索内容，可用空格隔开多个关键字";
         _rowSearchTextBox.TextChanged += (_, _) => RowSearchTextBoxTextChanged();
 
-        var searchLabel = BuildLabel("搜索");
-        searchLabel.Dock = DockStyle.None;
-        searchLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        searchLabel.Height = SearchControlHeight;
-        searchLabel.Margin = new Padding(0, 2, 0, 2);
-        searchBar.Controls.Add(searchLabel, 0, 0);
-        searchBar.Controls.Add(_rowSearchTextBox, 1, 0);
+        searchBar.Controls.Add(_rowSearchTextBox, 0, 0);
     }
 
     private void BuildContent(TableLayoutPanel root)

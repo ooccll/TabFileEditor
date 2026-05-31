@@ -45,14 +45,13 @@ public sealed class MainFormTests : IDisposable
             var displayColumnComboBox = FindDisplayColumnComboBox(form);
             Assert.Equal(ComboBoxStyle.DropDownList, displayColumnComboBox.DropDownStyle);
             var rowSearchTextBox = FindRowSearchTextBox(form);
-            Assert.Equal(2, searchBar.Controls.Count);
-            var searchLabel = Assert.IsType<Label>(searchBar.GetControlFromPosition(0, 0));
-            Assert.Equal("搜索", searchLabel.Text);
-            Assert.Same(rowSearchTextBox, searchBar.GetControlFromPosition(1, 0));
+            Assert.Same(rowSearchTextBox, Assert.Single(searchBar.Controls.Cast<Control>()));
+            Assert.Same(rowSearchTextBox, searchBar.GetControlFromPosition(0, 0));
+            Assert.DoesNotContain(
+                searchBar.Controls.Cast<Control>().OfType<Label>(),
+                label => label.Text == "搜索");
             Assert.DoesNotContain(FindDescendants<Button>(form), button => button.Name == "ClearSearchButton");
             Assert.Equal("搜索内容，可用空格隔开多个关键字", rowSearchTextBox.PlaceholderText);
-            Assert.Equal(rowSearchTextBox.Top, searchLabel.Top);
-            Assert.Equal(rowSearchTextBox.Height, searchLabel.Height);
 
             var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
             var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
