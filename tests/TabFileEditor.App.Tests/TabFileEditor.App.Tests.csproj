@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FillTabTable.App\FillTabTable.App.csproj" />
+    <ProjectReference Include="..\..\src\TabFileEditor.App\TabFileEditor.App.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-namespace FillTabTable.App;
+namespace TabFileEditor.App;
 
 static class Program
 {

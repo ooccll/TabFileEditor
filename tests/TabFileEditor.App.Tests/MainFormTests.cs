@@ -1,13 +1,13 @@
 using System.Runtime.ExceptionServices;
 using System.Text;
-using FillTabTable.App;
+using TabFileEditor.App;
 
-namespace FillTabTable.App.Tests;
+namespace TabFileEditor.App.Tests;
 
 public sealed class MainFormTests : IDisposable
 {
     private static readonly Encoding GbkEncoding = CreateGbkEncoding();
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "FillTabTableAppTests", Guid.NewGuid().ToString("N"));
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "TabFileEditorAppTests", Guid.NewGuid().ToString("N"));
 
     public MainFormTests()
     {

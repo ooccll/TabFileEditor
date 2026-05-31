@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace FillTabTable.Core;
+namespace TabFileEditor.Core;
 
 public sealed class TabTableDocument
 {

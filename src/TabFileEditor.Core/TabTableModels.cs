@@ -1,4 +1,4 @@
-namespace FillTabTable.Core;
+namespace TabFileEditor.Core;
 
 public sealed class TabTableColumn
 {

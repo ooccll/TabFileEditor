@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using FillTabTable.Core;
+using TabFileEditor.Core;
 
-namespace FillTabTable.App;
+namespace TabFileEditor.App;
 
 public sealed class MainForm : Form
 {

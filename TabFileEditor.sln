@@ -5,15 +5,15 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FillTabTable.Core", "src\FillTabTable.Core\FillTabTable.Core.csproj", "{CA683DDD-7E57-434C-BEA8-DB2B1E410D6B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TabFileEditor.Core", "src\TabFileEditor.Core\TabFileEditor.Core.csproj", "{CA683DDD-7E57-434C-BEA8-DB2B1E410D6B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FillTabTable.App", "src\FillTabTable.App\FillTabTable.App.csproj", "{5A3A39DE-2A78-453C-96C2-8294A2C82F7B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TabFileEditor.App", "src\TabFileEditor.App\TabFileEditor.App.csproj", "{5A3A39DE-2A78-453C-96C2-8294A2C82F7B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FillTabTable.Core.Tests", "tests\FillTabTable.Core.Tests\FillTabTable.Core.Tests.csproj", "{C01157C3-C3B0-4E02-8149-71C23E623DC2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TabFileEditor.Core.Tests", "tests\TabFileEditor.Core.Tests\TabFileEditor.Core.Tests.csproj", "{C01157C3-C3B0-4E02-8149-71C23E623DC2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FillTabTable.App.Tests", "tests\FillTabTable.App.Tests\FillTabTable.App.Tests.csproj", "{499CF83D-09B0-474E-BEBE-CC44CF573863}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TabFileEditor.App.Tests", "tests\TabFileEditor.App.Tests\TabFileEditor.App.Tests.csproj", "{499CF83D-09B0-474E-BEBE-CC44CF573863}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

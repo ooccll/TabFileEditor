@@ -1,12 +1,12 @@
 using System.Text;
-using FillTabTable.Core;
+using TabFileEditor.Core;
 
-namespace FillTabTable.Core.Tests;
+namespace TabFileEditor.Core.Tests;
 
 public sealed class TabTableDocumentTests : IDisposable
 {
     private static readonly Encoding GbkEncoding = CreateGbkEncoding();
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "FillTabTableTests", Guid.NewGuid().ToString("N"));
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "TabFileEditorTests", Guid.NewGuid().ToString("N"));
 
     public TabTableDocumentTests()
     {
