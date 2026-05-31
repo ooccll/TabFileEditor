@@ -68,7 +68,7 @@ public sealed class TabTableDocument
             throw new FileNotFoundException("未找到 tab 表格文件。", path);
         }
 
-        var bytes = File.ReadAllBytes(path);
+        var bytes = ReadAllBytesWithSharedAccess(path);
         var (encoding, text) = DecodeText(bytes);
         var newline = DetectNewline(text);
         var hasFinalNewline = EndsWithNewline(text);
@@ -248,6 +248,18 @@ public sealed class TabTableDocument
             var gb18030 = Encoding.GetEncoding("GB18030");
             return (gb18030, gb18030.GetString(bytes));
         }
+    }
+
+    private static byte[] ReadAllBytesWithSharedAccess(string path)
+    {
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        return memory.ToArray();
     }
 
     private static bool StartsWith(byte[] bytes, byte[] prefix)

@@ -70,6 +70,26 @@ public sealed class TabTableDocumentTests : IDisposable
     }
 
     [Fact]
+    public void LoadsTabFileWhileAnotherProcessHoldsSharedWriteAccess()
+    {
+        var path = Path.Combine(_tempDir, "SharedWrite.tab");
+        CreateTextTable(
+            path,
+            ["ID", "Name"],
+            ["1", "Alpha"]);
+
+        using var writer = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.Equal("Alpha", table.DataRows[0].Cells[1]);
+    }
+
+    [Fact]
     public void SavesEditedCellBackToTabFileWithOriginalEncodingAndNewline()
     {
         var path = Path.Combine(_tempDir, "SaveTab.xls");
