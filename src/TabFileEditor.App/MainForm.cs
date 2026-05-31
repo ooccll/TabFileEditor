@@ -266,6 +266,7 @@ public sealed class MainForm : Form
         _detailGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _detailGrid.EnableHeadersVisualStyles = false;
         _detailGrid.GridColor = BorderColor;
+        _detailGrid.EditMode = DataGridViewEditMode.EditProgrammatically;
         _detailGrid.MultiSelect = true;
         _detailGrid.RowHeadersVisible = false;
         _detailGrid.RowTemplate.Height = DetailGridRowHeight;
@@ -1074,6 +1075,21 @@ public sealed class MainForm : Form
     {
         if (_detailGrid.IsCurrentCellInEditMode || IsExpandedValueEditorActive())
         {
+            return;
+        }
+
+        if (e.KeyCode == Keys.F2 && !e.Control && !e.Alt && !e.Shift)
+        {
+            if (_detailGrid.CurrentCell is { RowIndex: >= 0 } currentCell &&
+                currentCell.ColumnIndex >= 0 &&
+                currentCell.ColumnIndex < _detailGrid.Columns.Count &&
+                _detailGrid.Columns[currentCell.ColumnIndex].Name == "Value")
+            {
+                ShowExpandedValueEditor(currentCell.RowIndex, currentCell.ColumnIndex);
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+            }
+
             return;
         }
 

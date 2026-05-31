@@ -637,6 +637,7 @@ public sealed class MainFormTests : IDisposable
             InvokePrivate(form, "LoadCurrentFile");
 
             var detailGrid = FindDetailGrid(form);
+            Assert.Equal(DataGridViewEditMode.EditProgrammatically, detailGrid.EditMode);
             detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
             var keyArgs = new KeyPressEventArgs('A');
 
@@ -725,6 +726,32 @@ public sealed class MainFormTests : IDisposable
 
             Assert.False(keyArgs.Handled);
             Assert.Equal("编辑中", editBox.Text);
+        });
+    }
+
+    [Fact]
+    public void DetailGridF2StartsExpandedEditorWithExistingValue()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells["Value"];
+            var keyArgs = new KeyEventArgs(Keys.F2);
+
+            InvokePrivate(form, "DetailGridKeyDown", detailGrid, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            Assert.True(keyArgs.SuppressKeyPress);
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.Equal("FirstQuest", editBox.Text);
+            Assert.Equal(editBox.Text.Length, editBox.SelectionStart);
+            Assert.Equal(0, editBox.SelectionLength);
         });
     }
 
