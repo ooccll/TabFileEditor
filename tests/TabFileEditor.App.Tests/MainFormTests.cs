@@ -90,15 +90,16 @@ public sealed class MainFormTests : IDisposable
             Assert.Equal(0, rowListBox.SelectedIndex);
 
             var detailGrid = FindDetailGrid(form);
-            Assert.Equal(4, detailGrid.Columns.Count);
-            Assert.Equal("第1行", detailGrid.Columns[1].HeaderText);
-            Assert.Equal("第2行", detailGrid.Columns[2].HeaderText);
-            Assert.Equal("值", detailGrid.Columns[3].HeaderText);
+            Assert.Equal(3, detailGrid.Columns.Count);
+            Assert.Null(detailGrid.Columns["ColumnIndex"]);
+            Assert.Equal("第1行", detailGrid.Columns[0].HeaderText);
+            Assert.Equal("第2行", detailGrid.Columns[1].HeaderText);
+            Assert.Equal("值", detailGrid.Columns[2].HeaderText);
+            Assert.True(detailGrid.Columns[0].ReadOnly);
             Assert.True(detailGrid.Columns[1].ReadOnly);
-            Assert.True(detailGrid.Columns[2].ReadOnly);
-            Assert.False(detailGrid.Columns[3].ReadOnly);
-            Assert.Equal("QuestName", detailGrid.Rows[1].Cells[1].Value);
-            Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells[3].Value);
+            Assert.False(detailGrid.Columns[2].ReadOnly);
+            Assert.Equal("QuestName", detailGrid.Rows[1].Cells[0].Value);
+            Assert.Equal("FirstQuest", detailGrid.Rows[1].Cells[2].Value);
         });
     }
 
@@ -123,12 +124,13 @@ public sealed class MainFormTests : IDisposable
             Assert.Equal(0, rowListBox.SelectedIndex);
 
             var detailGrid = FindDetailGrid(form);
-            Assert.Equal(4, detailGrid.Columns.Count);
-            Assert.Equal("第1行", detailGrid.Columns[1].HeaderText);
-            Assert.Equal("第2行", detailGrid.Columns[2].HeaderText);
-            Assert.Equal("Name", detailGrid.Rows[1].Cells[1].Value);
-            Assert.Equal("string", detailGrid.Rows[1].Cells[2].Value);
-            Assert.Equal("DefaultQuest", detailGrid.Rows[1].Cells[3].Value);
+            Assert.Equal(3, detailGrid.Columns.Count);
+            Assert.Null(detailGrid.Columns["ColumnIndex"]);
+            Assert.Equal("第1行", detailGrid.Columns[0].HeaderText);
+            Assert.Equal("第2行", detailGrid.Columns[1].HeaderText);
+            Assert.Equal("Name", detailGrid.Rows[1].Cells[0].Value);
+            Assert.Equal("string", detailGrid.Rows[1].Cells[1].Value);
+            Assert.Equal("DefaultQuest", detailGrid.Rows[1].Cells[2].Value);
         });
     }
 
@@ -207,7 +209,7 @@ public sealed class MainFormTests : IDisposable
 
             var detailGrid = FindDetailGrid(form);
             var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
-            var columnIndexColumnIndex = detailGrid.Columns["ColumnIndex"]!.Index;
+            var preambleColumnIndex = detailGrid.Columns["Preamble0"]!.Index;
             var pathValue = Assert.IsType<string>(detailGrid.Rows[2].Cells["Value"].Value);
             var pathStart = pathValue.IndexOf("path", StringComparison.OrdinalIgnoreCase);
 
@@ -216,7 +218,7 @@ public sealed class MainFormTests : IDisposable
 
             Assert.Contains(("FirstQuest".IndexOf("first", StringComparison.OrdinalIgnoreCase), "first".Length), nameRanges);
             Assert.Contains((pathStart, "path".Length), pathRanges);
-            Assert.Empty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, columnIndexColumnIndex));
+            Assert.Empty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, preambleColumnIndex));
 
             FindRowSearchTextBox(form).Clear();
 

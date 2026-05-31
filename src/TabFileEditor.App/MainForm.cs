@@ -516,9 +516,8 @@ public sealed class MainForm : Form
                 var rowIndex = _detailGrid.Rows.Add();
                 var gridRow = _detailGrid.Rows[rowIndex];
                 gridRow.Tag = column.Index;
-                gridRow.Cells[0].Value = $"第{column.Index + 1}列";
 
-                var gridColumnIndex = 1;
+                var gridColumnIndex = 0;
                 foreach (var preambleRow in _document.PreambleRows)
                 {
                     gridRow.Cells[gridColumnIndex].Value = TabTableDocument.GetCellValue(preambleRow, column.Index);
@@ -536,8 +535,6 @@ public sealed class MainForm : Form
 
     private void ConfigureDetailColumns()
     {
-        _detailGrid.Columns.Add(BuildReadOnlyTextColumn("ColumnIndex", "列", 86));
-
         if (_document is not null)
         {
             foreach (var preambleRow in _document.PreambleRows)
