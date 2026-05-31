@@ -281,6 +281,73 @@ public sealed class MainFormTests : IDisposable
         });
     }
 
+    [Fact]
+    public void EditingLongValueCellUsesExpandedMultilineEditor()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateLongDescriptionTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            const int descriptionRowIndex = 2;
+            detailGrid.CurrentCell = detailGrid.Rows[descriptionRowIndex].Cells[valueColumnIndex];
+            detailGrid.Size = new Size(700, 460);
+
+            var cellBounds = new Rectangle(220, 70, 420, detailGrid.Rows[descriptionRowIndex].Height);
+
+            var editBox = new TextBox
+            {
+                Text = Convert.ToString(detailGrid.CurrentCell.Value) ?? string.Empty,
+                Font = detailGrid.Font,
+                Bounds = cellBounds,
+            };
+            InvokePrivate(
+                form,
+                "DetailGridEditingControlShowing",
+                detailGrid,
+                new DataGridViewEditingControlShowingEventArgs(editBox, detailGrid.DefaultCellStyle));
+
+            Assert.True(editBox.Multiline);
+            Assert.True(editBox.WordWrap);
+            Assert.Equal(ScrollBars.Vertical, editBox.ScrollBars);
+            Assert.True(editBox.Height > detailGrid.Rows[descriptionRowIndex].Height);
+            Assert.True(editBox.Bottom <= detailGrid.ClientSize.Height);
+            Assert.Equal(30, detailGrid.Rows[descriptionRowIndex].Height);
+
+            detailGrid.CurrentCell = detailGrid.Rows[descriptionRowIndex].Cells[0];
+            var readOnlyEditBox = new TextBox
+            {
+                Multiline = true,
+                WordWrap = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = detailGrid.Font,
+                Bounds = cellBounds,
+            };
+            InvokePrivate(
+                form,
+                "DetailGridEditingControlShowing",
+                detailGrid,
+                new DataGridViewEditingControlShowingEventArgs(readOnlyEditBox, detailGrid.DefaultCellStyle));
+
+            Assert.False(readOnlyEditBox.Multiline);
+            Assert.False(readOnlyEditBox.WordWrap);
+            Assert.Equal(ScrollBars.None, readOnlyEditBox.ScrollBars);
+
+            var readOnlyEditArgs = new DataGridViewCellCancelEventArgs(0, descriptionRowIndex);
+            InvokePrivate(form, "DetailGridCellBeginEdit", detailGrid, readOnlyEditArgs);
+            Assert.True(readOnlyEditArgs.Cancel);
+        });
+    }
+
     private string CreateSampleTable()
     {
         var path = Path.Combine(_tempDir, "QuestTab.xls");
@@ -290,6 +357,20 @@ public sealed class MainFormTests : IDisposable
             "int\tstring\tstring",
             "1\tFirstQuest\tAlphaPath说明",
             "2\tSecondQuest\tOnlyMatchedByPath",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateLongDescriptionTable()
+    {
+        var path = Path.Combine(_tempDir, "LongDescriptionQuestTab.xls");
+        var longDescription = string.Join(' ', Enumerable.Repeat("LongDescriptionSegment", 160));
+        var lines = new[]
+        {
+            "ID\tQuestName\tDesc",
+            "int\tstring\tstring",
+            $"1\tFirstQuest\t{longDescription}",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;
