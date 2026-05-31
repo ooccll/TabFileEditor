@@ -350,6 +350,63 @@ public sealed class MainFormTests : IDisposable
         });
     }
 
+    [Fact]
+    public void DoubleClickingUnselectedValueCellStartsExpandedEditor()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateLongDescriptionTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.Size = new Size(700, 460);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            const int descriptionRowIndex = 2;
+            detailGrid.CurrentCell = detailGrid.Rows[0].Cells[0];
+
+            var cellBounds = detailGrid.GetCellDisplayRectangle(valueColumnIndex, descriptionRowIndex, cutOverflow: false);
+            if (cellBounds.Width <= 0 || cellBounds.Height <= 0)
+            {
+                cellBounds = new Rectangle(
+                    detailGrid.Columns.Cast<DataGridViewColumn>().Take(valueColumnIndex).Sum(column => column.Width),
+                    detailGrid.ColumnHeadersHeight + descriptionRowIndex * detailGrid.Rows[descriptionRowIndex].Height,
+                    detailGrid.Columns[valueColumnIndex].Width,
+                    detailGrid.Rows[descriptionRowIndex].Height);
+            }
+
+            InvokePrivate(
+                form,
+                "DetailGridCellDoubleClick",
+                detailGrid,
+                new DataGridViewCellEventArgs(valueColumnIndex, descriptionRowIndex));
+
+            Assert.Same(detailGrid.Rows[descriptionRowIndex].Cells[valueColumnIndex], detailGrid.CurrentCell);
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.Equal(Convert.ToString(detailGrid.CurrentCell.Value), editBox.Text);
+            Assert.Equal(cellBounds.Left, editBox.Left);
+            Assert.Equal(cellBounds.Top, editBox.Top);
+            Assert.Equal(cellBounds.Width, editBox.Width);
+            Assert.True(editBox.Height > detailGrid.Rows[descriptionRowIndex].Height);
+
+            InvokePrivate(form, "HideExpandedValueEditor");
+            detailGrid.CurrentCell = detailGrid.Rows[0].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellDoubleClick",
+                detailGrid,
+                new DataGridViewCellEventArgs(0, descriptionRowIndex));
+
+            Assert.Equal(string.Empty, editBox.Text);
+        });
+    }
+
     private string CreateSampleTable()
     {
         var path = Path.Combine(_tempDir, "QuestTab.xls");

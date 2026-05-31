@@ -297,6 +297,7 @@ public sealed class MainForm : Form
         _detailGrid.DefaultCellStyle.SelectionForeColor = TextColor;
         _detailGrid.CellValueChanged += DetailGridCellValueChanged;
         _detailGrid.CellBeginEdit += DetailGridCellBeginEdit;
+        _detailGrid.CellDoubleClick += DetailGridCellDoubleClick;
         _detailGrid.CellEndEdit += DetailGridCellEndEdit;
         _detailGrid.CellPainting += DetailGridCellPainting;
         ConfigureExpandedValueEditor();
@@ -636,6 +637,26 @@ public sealed class MainForm : Form
         {
             ShowExpandedValueEditor(e.RowIndex, e.ColumnIndex);
         }
+    }
+
+    private void DetailGridCellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 ||
+            e.ColumnIndex < 0 ||
+            e.RowIndex >= _detailGrid.Rows.Count ||
+            e.ColumnIndex >= _detailGrid.Columns.Count ||
+            _detailGrid.Columns[e.ColumnIndex].Name != "Value")
+        {
+            return;
+        }
+
+        if (!CommitExpandedValueEditor())
+        {
+            return;
+        }
+
+        _detailGrid.CurrentCell = _detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+        ShowExpandedValueEditor(e.RowIndex, e.ColumnIndex);
     }
 
     private void DetailGridCellEndEdit(object? sender, DataGridViewCellEventArgs e)
