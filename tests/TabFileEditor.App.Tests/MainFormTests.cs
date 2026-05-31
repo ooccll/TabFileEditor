@@ -45,19 +45,14 @@ public sealed class MainFormTests : IDisposable
             var displayColumnComboBox = FindDisplayColumnComboBox(form);
             Assert.Equal(ComboBoxStyle.DropDownList, displayColumnComboBox.DropDownStyle);
             var rowSearchTextBox = FindRowSearchTextBox(form);
-            var clearSearchButton = FindClearSearchButton(form);
-            Assert.Equal(3, searchBar.Controls.Count);
+            Assert.Equal(2, searchBar.Controls.Count);
             var searchLabel = Assert.IsType<Label>(searchBar.GetControlFromPosition(0, 0));
             Assert.Equal("搜索", searchLabel.Text);
             Assert.Same(rowSearchTextBox, searchBar.GetControlFromPosition(1, 0));
-            Assert.Same(clearSearchButton, searchBar.GetControlFromPosition(2, 0));
+            Assert.DoesNotContain(FindDescendants<Button>(form), button => button.Name == "ClearSearchButton");
             Assert.Equal("搜索内容，可用空格隔开多个关键字", rowSearchTextBox.PlaceholderText);
-            Assert.Equal("×", clearSearchButton.Text);
             Assert.Equal(rowSearchTextBox.Top, searchLabel.Top);
             Assert.Equal(rowSearchTextBox.Height, searchLabel.Height);
-            Assert.Equal(rowSearchTextBox.Height, clearSearchButton.Height);
-            Assert.Equal(ContentAlignment.MiddleCenter, clearSearchButton.TextAlign);
-            Assert.Equal(new Padding(0, 0, 0, 2), clearSearchButton.Padding);
 
             var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
             var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
@@ -202,7 +197,7 @@ public sealed class MainFormTests : IDisposable
             var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
             Assert.NotEmpty(GetDetailSearchMatchRanges(form, detailRowIndex: 2, valueColumnIndex));
 
-            InvokePrivate(FindClearSearchButton(form), "OnClick", EventArgs.Empty);
+            rowSearchTextBox.Clear();
 
             Assert.Equal(string.Empty, rowSearchTextBox.Text);
             Assert.Equal(2, rowListBox.Items.Count);
@@ -497,11 +492,6 @@ public sealed class MainFormTests : IDisposable
     private static TextBox FindRowSearchTextBox(Form form)
     {
         return FindDescendants<TextBox>(form).Single(textBox => textBox.Name == "RowSearchTextBox");
-    }
-
-    private static Button FindClearSearchButton(Form form)
-    {
-        return FindDescendants<Button>(form).Single(button => button.Name == "ClearSearchButton");
     }
 
     private static TextBox FindExpandedValueEditorTextBox(Form form)

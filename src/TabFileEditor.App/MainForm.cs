@@ -38,7 +38,6 @@ public sealed class MainForm : Form
     private readonly ComboBox _displayColumnComboBox = new();
     private readonly SplitContainer _splitContainer = new();
     private readonly TextBox _rowSearchTextBox = new();
-    private readonly Button _clearSearchButton = new();
     private readonly ListBox _rowListBox = new();
     private readonly DataGridView _detailGrid = new();
     private readonly TextBox _expandedValueEditorTextBox = new();
@@ -163,14 +162,13 @@ public sealed class MainForm : Form
         var searchBar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 2,
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(10, 0, 10, 8),
         };
         searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56));
         searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40));
         searchBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.Controls.Add(searchBar, 0, 1);
 
@@ -189,18 +187,6 @@ public sealed class MainForm : Form
         searchLabel.Margin = new Padding(0, 2, 0, 2);
         searchBar.Controls.Add(searchLabel, 0, 0);
         searchBar.Controls.Add(_rowSearchTextBox, 1, 0);
-
-        ConfigureButton(_clearSearchButton, "×");
-        _clearSearchButton.Name = "ClearSearchButton";
-        _clearSearchButton.Dock = DockStyle.None;
-        _clearSearchButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _clearSearchButton.Height = SearchControlHeight;
-        _clearSearchButton.Font = new Font(Font, FontStyle.Bold);
-        _clearSearchButton.Padding = new Padding(0, 0, 0, 2);
-        _clearSearchButton.TextAlign = ContentAlignment.MiddleCenter;
-        _clearSearchButton.Margin = new Padding(4, 2, 0, 2);
-        _clearSearchButton.Click += (_, _) => _rowSearchTextBox.Clear();
-        searchBar.Controls.Add(_clearSearchButton, 2, 0);
     }
 
     private void BuildContent(TableLayoutPanel root)
