@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using TabFileEditor.App;
 
@@ -838,6 +839,86 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DetailGridCurrentCellChangeCommitsActiveExpandedEditor()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "切格提交内容";
+
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells[valueColumnIndex];
+            Application.DoEvents();
+
+            Assert.False(editBox.Visible);
+            Assert.Equal("切格提交内容", detailGrid.Rows[2].Cells["Value"].Value);
+            Assert.True(FindButton(form, "保存").Enabled);
+            Assert.Same(detailGrid.Rows[1].Cells[valueColumnIndex], detailGrid.CurrentCell);
+        });
+    }
+
+    [Fact]
+    public void DetailGridCurrentCellChangeKeepsActiveExpandedEditorWhenCommitFails()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            var originalCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            detailGrid.CurrentCell = originalCell;
+            var originalValue = Convert.ToString(originalCell.Value);
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "非法\t内容";
+            using var closeDialogCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var closeDialogTask = Task.Run(() => CloseMessageBox("内容无效", closeDialogCancellation.Token));
+
+            detailGrid.CurrentCell = detailGrid.Rows[1].Cells[valueColumnIndex];
+            Application.DoEvents();
+            closeDialogCancellation.Cancel();
+            closeDialogTask.GetAwaiter().GetResult();
+
+            Assert.True(editBox.Visible);
+            Assert.Equal("非法\t内容", editBox.Text);
+            Assert.Equal(originalValue, detailGrid.Rows[2].Cells["Value"].Value);
+            Assert.Same(originalCell, detailGrid.CurrentCell);
+        });
+    }
+
+    [Fact]
     public void DetailGridManualColumnWidthPersistsAcrossRowChangesAndResetsOnReload()
     {
         RunOnStaThread(() =>
@@ -1158,6 +1239,21 @@ public sealed class MainFormTests : IDisposable
         exception?.Throw();
     }
 
+    private static void CloseMessageBox(string title, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var dialogHandle = FindWindow("#32770", title);
+            if (dialogHandle != IntPtr.Zero)
+            {
+                PostMessage(dialogHandle, WmClose, IntPtr.Zero, IntPtr.Zero);
+                return;
+            }
+
+            Thread.Sleep(20);
+        }
+    }
+
     private static TextBox FindFilePathTextBox(Form form)
     {
         return FindDescendants<TextBox>(form).Single(textBox => textBox.Name == "FilePathTextBox");
@@ -1321,4 +1417,12 @@ public sealed class MainFormTests : IDisposable
     {
         return ColorTranslator.FromHtml("#D7E9FF");
     }
+
+    private const int WmClose = 0x0010;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr FindWindow(string? className, string? windowName);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PostMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam);
 }

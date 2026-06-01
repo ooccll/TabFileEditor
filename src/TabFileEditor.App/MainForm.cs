@@ -55,6 +55,8 @@ public sealed class MainForm : Form
     private bool _loadingDetails;
     private bool _splitterInitialized;
     private bool _committingExpandedValueEditor;
+    private bool _handlingDetailCurrentCellChanged;
+    private bool _pendingExpandedValueEditorCurrentCellCommit;
     private int _expandedValueEditorRowIndex = -1;
     private int _expandedValueEditorColumnIndex = -1;
     private int _displayColumnIndex;
@@ -287,7 +289,7 @@ public sealed class MainForm : Form
         _detailGrid.ColumnWidthChanged += DetailGridColumnWidthChanged;
         _detailGrid.KeyDown += DetailGridKeyDown;
         _detailGrid.KeyPress += DetailGridKeyPress;
-        _detailGrid.CurrentCellChanged += (_, _) => UpdateDetailCurrentRowHighlight();
+        _detailGrid.CurrentCellChanged += DetailGridCurrentCellChanged;
         ConfigureExpandedValueEditor();
         _splitContainer.Panel2.Controls.Add(_detailGrid);
     }
@@ -802,6 +804,86 @@ public sealed class MainForm : Form
     private void DetailGridCellEndEdit(object? sender, DataGridViewCellEventArgs e)
     {
         _detailGrid.Rows[e.RowIndex].ErrorText = string.Empty;
+    }
+
+    private void DetailGridCurrentCellChanged(object? sender, EventArgs e)
+    {
+        if (_handlingDetailCurrentCellChanged)
+        {
+            UpdateDetailCurrentRowHighlight();
+            return;
+        }
+
+        if (!_pendingExpandedValueEditorCurrentCellCommit &&
+            IsExpandedValueEditorActive() &&
+            _detailGrid.CurrentCell is { } currentCell &&
+            (currentCell.RowIndex != _expandedValueEditorRowIndex ||
+             currentCell.ColumnIndex != _expandedValueEditorColumnIndex))
+        {
+            var editorRowIndex = _expandedValueEditorRowIndex;
+            var editorColumnIndex = _expandedValueEditorColumnIndex;
+            _pendingExpandedValueEditorCurrentCellCommit = true;
+            BeginInvoke(() => CommitExpandedValueEditorAfterCurrentCellChanged(editorRowIndex, editorColumnIndex));
+        }
+
+        UpdateDetailCurrentRowHighlight();
+    }
+
+    private void CommitExpandedValueEditorAfterCurrentCellChanged(int editorRowIndex, int editorColumnIndex)
+    {
+        _pendingExpandedValueEditorCurrentCellCommit = false;
+        if (!IsExpandedValueEditorActive() ||
+            _expandedValueEditorRowIndex != editorRowIndex ||
+            _expandedValueEditorColumnIndex != editorColumnIndex ||
+            _detailGrid.CurrentCell is null ||
+            (_detailGrid.CurrentCell.RowIndex == editorRowIndex &&
+             _detailGrid.CurrentCell.ColumnIndex == editorColumnIndex))
+        {
+            return;
+        }
+
+        _handlingDetailCurrentCellChanged = true;
+        try
+        {
+            if (!CommitExpandedValueEditor())
+            {
+                RestoreDetailCurrentCell(editorRowIndex, editorColumnIndex);
+            }
+        }
+        finally
+        {
+            _handlingDetailCurrentCellChanged = false;
+        }
+
+        UpdateDetailCurrentRowHighlight();
+    }
+
+    private void RestoreDetailCurrentCell(int rowIndex, int columnIndex)
+    {
+        if (rowIndex < 0 ||
+            rowIndex >= _detailGrid.Rows.Count ||
+            columnIndex < 0 ||
+            columnIndex >= _detailGrid.Columns.Count ||
+            !_detailGrid.Rows[rowIndex].Visible ||
+            !_detailGrid.Columns[columnIndex].Visible)
+        {
+            return;
+        }
+
+        _handlingDetailCurrentCellChanged = true;
+        try
+        {
+            _detailGrid.CurrentCell = _detailGrid.Rows[rowIndex].Cells[columnIndex];
+        }
+        finally
+        {
+            _handlingDetailCurrentCellChanged = false;
+        }
+
+        if (_expandedValueEditorTextBox.Visible)
+        {
+            _expandedValueEditorTextBox.Focus();
+        }
     }
 
     private void ShowExpandedValueEditor(int rowIndex, int columnIndex, string? initialText = null)
