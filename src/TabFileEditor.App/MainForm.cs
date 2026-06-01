@@ -849,6 +849,10 @@ public sealed class MainForm : Form
             {
                 RestoreDetailCurrentCell(editorRowIndex, editorColumnIndex);
             }
+            else
+            {
+                _detailGrid.Focus();
+            }
         }
         finally
         {

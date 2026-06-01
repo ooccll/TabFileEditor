@@ -855,6 +855,7 @@ public sealed class MainFormTests : IDisposable
             form.PerformLayout();
 
             var detailGrid = FindDetailGrid(form);
+            var displayColumnComboBox = FindDisplayColumnComboBox(form);
             var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
             detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
             InvokePrivate(
@@ -872,6 +873,8 @@ public sealed class MainFormTests : IDisposable
             Assert.Equal("切格提交内容", detailGrid.Rows[2].Cells["Value"].Value);
             Assert.True(FindButton(form, "保存").Enabled);
             Assert.Same(detailGrid.Rows[1].Cells[valueColumnIndex], detailGrid.CurrentCell);
+            Assert.True(detailGrid.Focused);
+            Assert.False(displayColumnComboBox.Focused);
         });
     }
 
