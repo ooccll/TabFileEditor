@@ -461,6 +461,7 @@ public sealed class MainForm : Form
             return;
         }
 
+        var detailGridViewportState = CaptureDetailGridViewportState(preferredRow);
         _loadingRows = true;
         try
         {
@@ -511,7 +512,7 @@ public sealed class MainForm : Form
 
         if (_rowListBox.SelectedItem is RowListItem)
         {
-            RenderSelectedRow();
+            RenderSelectedRow(detailGridViewportState);
         }
     }
 
@@ -529,7 +530,7 @@ public sealed class MainForm : Form
         return true;
     }
 
-    private void RenderSelectedRow()
+    private void RenderSelectedRow(DetailGridViewportState? viewportState = null)
     {
         if (_loadingRows)
         {
@@ -572,7 +573,131 @@ public sealed class MainForm : Form
             _loadingDetails = false;
         }
 
+        RestoreDetailGridViewportState(viewportState);
         UpdateDetailCurrentRowHighlight();
+    }
+
+    private DetailGridViewportState? CaptureDetailGridViewportState(TabTableRow? preferredRow)
+    {
+        if (preferredRow is null ||
+            _rowListBox.SelectedItem is not RowListItem selectedItem ||
+            !ReferenceEquals(selectedItem.Row, preferredRow) ||
+            _detailGrid.Rows.Count == 0)
+        {
+            return null;
+        }
+
+        return new DetailGridViewportState(
+            TryGetFirstDisplayedScrollingRowIndex(),
+            TryGetFirstDisplayedScrollingColumnIndex(),
+            _detailGrid.CurrentCell?.RowIndex,
+            _detailGrid.CurrentCell?.ColumnIndex);
+    }
+
+    private int? TryGetFirstDisplayedScrollingRowIndex()
+    {
+        try
+        {
+            return _detailGrid.FirstDisplayedScrollingRowIndex;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private int? TryGetFirstDisplayedScrollingColumnIndex()
+    {
+        try
+        {
+            return _detailGrid.FirstDisplayedScrollingColumnIndex;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private void RestoreDetailGridViewportState(DetailGridViewportState? viewportState)
+    {
+        if (viewportState is null ||
+            _detailGrid.Rows.Count == 0 ||
+            _detailGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        RestoreDetailGridCurrentCell(viewportState);
+        RestoreFirstDisplayedScrollingColumn(viewportState.FirstDisplayedScrollingColumnIndex);
+        RestoreFirstDisplayedScrollingRow(viewportState.FirstDisplayedScrollingRowIndex);
+    }
+
+    private void RestoreDetailGridCurrentCell(DetailGridViewportState viewportState)
+    {
+        if (viewportState.CurrentCellRowIndex is not { } rowIndex ||
+            viewportState.CurrentCellColumnIndex is not { } columnIndex ||
+            rowIndex < 0 ||
+            rowIndex >= _detailGrid.Rows.Count ||
+            columnIndex < 0 ||
+            columnIndex >= _detailGrid.Columns.Count ||
+            !_detailGrid.Rows[rowIndex].Visible ||
+            !_detailGrid.Columns[columnIndex].Visible)
+        {
+            return;
+        }
+
+        _detailGrid.CurrentCell = _detailGrid.Rows[rowIndex].Cells[columnIndex];
+    }
+
+    private void RestoreFirstDisplayedScrollingRow(int? rowIndex)
+    {
+        if (rowIndex is null || _detailGrid.Rows.Count == 0)
+        {
+            return;
+        }
+
+        var clampedRowIndex = Math.Clamp(rowIndex.Value, 0, _detailGrid.Rows.Count - 1);
+        if (!_detailGrid.Rows[clampedRowIndex].Visible)
+        {
+            return;
+        }
+
+        try
+        {
+            _detailGrid.FirstDisplayedScrollingRowIndex = clampedRowIndex;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+        }
+    }
+
+    private void RestoreFirstDisplayedScrollingColumn(int? columnIndex)
+    {
+        if (columnIndex is null || _detailGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        var clampedColumnIndex = Math.Clamp(columnIndex.Value, 0, _detailGrid.Columns.Count - 1);
+        var column = _detailGrid.Columns[clampedColumnIndex];
+        if (!column.Visible || column.Frozen)
+        {
+            return;
+        }
+
+        try
+        {
+            _detailGrid.FirstDisplayedScrollingColumnIndex = clampedColumnIndex;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+        }
     }
 
     private void ConfigureDetailColumns()
@@ -1617,4 +1742,10 @@ public sealed class MainForm : Form
         int DetailRowIndex,
         int TableColumnIndex,
         string OldValue);
+
+    private sealed record DetailGridViewportState(
+        int? FirstDisplayedScrollingRowIndex,
+        int? FirstDisplayedScrollingColumnIndex,
+        int? CurrentCellRowIndex,
+        int? CurrentCellColumnIndex);
 }

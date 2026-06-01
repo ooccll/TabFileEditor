@@ -278,6 +278,46 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void EditingValueCellPreservesDetailGridScrollPosition()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateWideSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 360);
+            form.CreateControl();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            detailGrid.Size = new Size(700, 160);
+            detailGrid.PerformLayout();
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            const int scrollRowIndex = 8;
+            const int editedRowIndex = 14;
+            detailGrid.CurrentCell = detailGrid.Rows[editedRowIndex].Cells[valueColumnIndex];
+            detailGrid.FirstDisplayedScrollingRowIndex = scrollRowIndex;
+            var previousFirstDisplayedRowIndex = detailGrid.FirstDisplayedScrollingRowIndex;
+
+            detailGrid.Rows[editedRowIndex].Cells["Value"].Value = "修改后中部字段";
+            InvokePrivate(
+                form,
+                "DetailGridCellValueChanged",
+                detailGrid,
+                new DataGridViewCellEventArgs(valueColumnIndex, editedRowIndex));
+
+            Assert.True(FindButton(form, "保存").Enabled);
+            Assert.Equal("修改后中部字段", detailGrid.Rows[editedRowIndex].Cells["Value"].Value);
+            Assert.Equal(previousFirstDisplayedRowIndex, detailGrid.FirstDisplayedScrollingRowIndex);
+            Assert.Equal(editedRowIndex, detailGrid.CurrentCell?.RowIndex);
+            Assert.Equal(valueColumnIndex, detailGrid.CurrentCell?.ColumnIndex);
+        });
+    }
+
+    [Fact]
     public void SaveShortcutWritesEditedValueAndDisablesSaveButton()
     {
         RunOnStaThread(() =>
@@ -948,6 +988,32 @@ public sealed class MainFormTests : IDisposable
             "int\tstring\tstring",
             "1\tFirstQuest\tAlphaPath说明",
             "2\tSecondQuest\tOnlyMatchedByPath",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateWideSampleTable()
+    {
+        var path = Path.Combine(_tempDir, "WideQuestTab.xls");
+        var headers = new[] { "ID", "QuestName" }
+            .Concat(Enumerable.Range(1, 28).Select(index => $"Field{index}"))
+            .ToArray();
+        var types = new[] { "int", "string" }
+            .Concat(Enumerable.Repeat("string", 28))
+            .ToArray();
+        var firstRow = new[] { "1", "FirstQuest" }
+            .Concat(Enumerable.Range(1, 28).Select(index => $"Value{index}"))
+            .ToArray();
+        var secondRow = new[] { "2", "SecondQuest" }
+            .Concat(Enumerable.Range(1, 28).Select(index => $"Other{index}"))
+            .ToArray();
+        var lines = new[]
+        {
+            string.Join('\t', headers),
+            string.Join('\t', types),
+            string.Join('\t', firstRow),
+            string.Join('\t', secondRow),
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;
