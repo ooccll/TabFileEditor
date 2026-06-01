@@ -796,6 +796,82 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void ExpandedValueEditorEnterCommitsAndReturnsFocusToDetailGrid()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            const int descriptionRowIndex = 2;
+            detailGrid.CurrentCell = detailGrid.Rows[descriptionRowIndex].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, descriptionRowIndex));
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "回车提交内容";
+            editBox.Focus();
+            Assert.True(editBox.Focused);
+            var keyArgs = new KeyEventArgs(Keys.Enter);
+
+            InvokePrivate(form, "ExpandedValueEditorTextBoxKeyDown", editBox, keyArgs);
+
+            Assert.True(keyArgs.Handled);
+            Assert.True(keyArgs.SuppressKeyPress);
+            Assert.False(editBox.Visible);
+            Assert.Equal("回车提交内容", detailGrid.Rows[descriptionRowIndex].Cells["Value"].Value);
+            Assert.True(FindButton(form, "保存").Enabled);
+            Assert.True(detailGrid.Focused);
+        });
+    }
+
+    [Fact]
+    public void DetailGridManualColumnWidthPersistsAcrossRowChangesAndResetsOnReload()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            var detailGrid = FindDetailGrid(form);
+            var preambleColumn = detailGrid.Columns["Preamble0"]!;
+            var defaultWidth = preambleColumn.Width;
+            const int manualWidth = 260;
+            Assert.NotEqual(manualWidth, defaultWidth);
+
+            preambleColumn.Width = manualWidth;
+            rowListBox.SelectedIndex = 1;
+
+            Assert.Equal(manualWidth, detailGrid.Columns["Preamble0"]!.Width);
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            Assert.Equal(defaultWidth, detailGrid.Columns["Preamble0"]!.Width);
+        });
+    }
+
+    [Fact]
     public void DetailGridShortcutsDoNotInterceptExpandedValueEditor()
     {
         RunOnStaThread(() =>

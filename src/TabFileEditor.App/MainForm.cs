@@ -47,6 +47,7 @@ public sealed class MainForm : Form
     private readonly Button _saveButton = new();
     private readonly ToolStripStatusLabel _statusLabel = new();
     private readonly Stack<DetailUndoAction> _undoStack = new();
+    private readonly Dictionary<string, int> _detailGridColumnWidths = new();
 
     private TabTableDocument? _document;
     private bool _isDirty;
@@ -283,6 +284,7 @@ public sealed class MainForm : Form
         _detailGrid.CellDoubleClick += DetailGridCellDoubleClick;
         _detailGrid.CellEndEdit += DetailGridCellEndEdit;
         _detailGrid.CellPainting += DetailGridCellPainting;
+        _detailGrid.ColumnWidthChanged += DetailGridColumnWidthChanged;
         _detailGrid.KeyDown += DetailGridKeyDown;
         _detailGrid.KeyPress += DetailGridKeyPress;
         _detailGrid.CurrentCellChanged += (_, _) => UpdateDetailCurrentRowHighlight();
@@ -389,6 +391,7 @@ public sealed class MainForm : Form
             _document = TabTableDocument.Load(path);
             _isDirty = false;
             _undoStack.Clear();
+            _detailGridColumnWidths.Clear();
             _rowSearchTextBox.Clear();
             PopulateDisplayColumnComboBox();
             RenderRows(selectFirstWhenAvailable: true);
@@ -724,6 +727,7 @@ public sealed class MainForm : Form
         };
         valueColumn.DefaultCellStyle.BackColor = PanelBg;
         _detailGrid.Columns.Add(valueColumn);
+        ApplyDetailGridColumnWidths();
     }
 
     private static DataGridViewTextBoxColumn BuildReadOnlyTextColumn(string name, string headerText, int width)
@@ -738,6 +742,27 @@ public sealed class MainForm : Form
             SortMode = DataGridViewColumnSortMode.NotSortable,
             DefaultCellStyle = { BackColor = ReadOnlyCellBg },
         };
+    }
+
+    private void ApplyDetailGridColumnWidths()
+    {
+        foreach (DataGridViewColumn column in _detailGrid.Columns)
+        {
+            if (_detailGridColumnWidths.TryGetValue(column.Name, out var width))
+            {
+                column.Width = Math.Max(column.MinimumWidth, width);
+            }
+        }
+    }
+
+    private void DetailGridColumnWidthChanged(object? sender, DataGridViewColumnEventArgs e)
+    {
+        if (_loadingDetails || string.IsNullOrEmpty(e.Column.Name))
+        {
+            return;
+        }
+
+        _detailGridColumnWidths[e.Column.Name] = e.Column.Width;
     }
 
     private void DetailGridCellBeginEdit(object? sender, DataGridViewCellCancelEventArgs e)
@@ -926,7 +951,11 @@ public sealed class MainForm : Form
         if (e.KeyCode == Keys.Enter)
         {
             e.SuppressKeyPress = true;
-            CommitExpandedValueEditor();
+            if (CommitExpandedValueEditor())
+            {
+                e.Handled = true;
+                _detailGrid.Focus();
+            }
         }
         else if (e.KeyCode == Keys.Escape)
         {
