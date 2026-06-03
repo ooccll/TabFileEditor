@@ -252,9 +252,17 @@ public sealed class MainForm : Form
             Padding = Padding.Empty,
             BackColor = WindowBg,
         };
-        buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        ConfigureButton(_insertRowButton, "在下方插入");
+        _insertRowButton.AutoSize = false;
+        _insertRowButton.Dock = DockStyle.Fill;
+        _insertRowButton.TextAlign = ContentAlignment.MiddleCenter;
+        _insertRowButton.Padding = new Padding(8, 0, 4, 0);
+        _insertRowButton.Click += (_, _) => InsertRowBelow();
+        buttonPanel.Controls.Add(_insertRowButton, 0, 0);
 
         ConfigureButton(_deleteRowButton, "删除");
         _deleteRowButton.AutoSize = true;
@@ -263,15 +271,7 @@ public sealed class MainForm : Form
         _deleteRowButton.TextAlign = ContentAlignment.MiddleCenter;
         _deleteRowButton.Padding = new Padding(4, 0, 4, 0);
         _deleteRowButton.Click += (_, _) => DeleteSelectedRow();
-        buttonPanel.Controls.Add(_deleteRowButton, 0, 0);
-
-        ConfigureButton(_insertRowButton, "在下方插入");
-        _insertRowButton.AutoSize = false;
-        _insertRowButton.Dock = DockStyle.Fill;
-        _insertRowButton.TextAlign = ContentAlignment.MiddleLeft;
-        _insertRowButton.Padding = new Padding(8, 0, 4, 0);
-        _insertRowButton.Click += (_, _) => InsertRowBelow();
-        buttonPanel.Controls.Add(_insertRowButton, 1, 0);
+        buttonPanel.Controls.Add(_deleteRowButton, 1, 0);
 
         rowListPanel.Controls.Add(buttonPanel, 0, 2);
     }
