@@ -259,6 +259,122 @@ public sealed class TabTableDocumentTests : IDisposable
         Assert.Equal("atBar", table.DataRows[0].Cells[0]);
     }
 
+    [Fact]
+    public void DetectsSchemaHeaderBeforeNumericIndexRowsWithoutIdColumn()
+    {
+        var path = Path.Combine(_tempDir, "SchemaHeader.tab");
+        CreateTextTable(
+            path,
+            ["nIndex", "szType", "szName", "_Comment", "szBigAvatarPath", "nBigAvatarFrame"],
+            ["0", "NPC/Longshou/Tower", "龙首", "备注", "ui/Image/Common/MobaMessage5.UITex", "8"],
+            ["1", "", "小兵", "备注", "ui/Image/Common/MobaMessage5.UITex", "8"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.False(table.HasIdColumn);
+        Assert.Equal(1, table.DataStartRowIndex);
+        Assert.Single(table.PreambleRows);
+        Assert.Equal("nIndex", table.PreambleRows[0].Cells[0]);
+        Assert.Equal(2, table.DataRows.Count);
+        Assert.Equal("0", table.DataRows[0].Cells[0]);
+        Assert.Equal(2, table.RecommendedDisplayColumnIndex);
+        Assert.Equal("龙首", table.BuildRowListText(table.DataRows[0], table.RecommendedDisplayColumnIndex));
+    }
+
+    [Fact]
+    public void SchemaHeaderWithCommentRowAndNumericData()
+    {
+        var path = Path.Combine(_tempDir, "SchemaWithComment.tab");
+        CreateTextTable(
+            path,
+            ["nIndex", "szType", "szName"],
+            ["1001", "NPC", "铁匠"],
+            ["1002", "NPC", "商人"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.Equal(1, table.DataStartRowIndex);
+        Assert.Single(table.PreambleRows);
+        Assert.Equal(2, table.DataRows.Count);
+        Assert.Equal("1001", table.DataRows[0].Cells[0]);
+    }
+
+    [Fact]
+    public void AttributeTableWithIdHeaderAndStringKeysStillWorks()
+    {
+        var path = Path.Combine(_tempDir, "AttributeRegression.tab");
+        CreateTextTable(
+            path,
+            ["ID", "IsNormal", "GeneratedBase", "GeneratedMagic"],
+            ["atInvalid", "{D2-D0}"],
+            ["atAgilityBase", "1", "<text>", ""]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.True(table.HasIdColumn);
+        Assert.Equal(1, table.DataStartRowIndex);
+        Assert.Single(table.PreambleRows);
+        Assert.Equal("ID", table.PreambleRows[0].Cells[0]);
+        Assert.Equal(2, table.DataRows.Count);
+        Assert.Equal("atInvalid", table.DataRows[0].Cells[0]);
+    }
+
+    [Fact]
+    public void AtInvalidAsFirstRowDoesNotCreatePreamble()
+    {
+        var path = Path.Combine(_tempDir, "AtInvalidFirst.tab");
+        CreateTextTable(
+            path,
+            ["atInvalid", "{D2-D0}"],
+            ["atFoo", "1"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.False(table.HasIdColumn);
+        Assert.Equal(0, table.DataStartRowIndex);
+        Assert.Empty(table.PreambleRows);
+        Assert.Equal(2, table.DataRows.Count);
+    }
+
+    [Fact]
+    public void TwoColumnKeyValueTableHasNoPreamble()
+    {
+        var path = Path.Combine(_tempDir, "KeyValue.tab");
+        CreateTextTable(
+            path,
+            ["Key", "Value"],
+            ["Alpha", "One"],
+            ["Beta", "Two"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.False(table.HasIdColumn);
+        Assert.Equal(0, table.DataStartRowIndex);
+        Assert.Empty(table.PreambleRows);
+        Assert.Equal(3, table.DataRows.Count);
+    }
+
+    [Fact]
+    public void NumericIdTableWithThreePreambleRowsStillWorks()
+    {
+        var path = Path.Combine(_tempDir, "ThreePreamble.tab");
+        CreateTextTable(
+            path,
+            ["ID", "QuestName", "Desc"],
+            ["int", "string", "string"],
+            ["编号", "任务名", "描述"],
+            ["1", "FirstQuest", "第一条"],
+            ["2", "SecondQuest", "第二条"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.True(table.HasIdColumn);
+        Assert.Equal(3, table.DataStartRowIndex);
+        Assert.Equal(3, table.PreambleRows.Count);
+        Assert.Equal(2, table.DataRows.Count);
+        Assert.Equal("[1] FirstQuest", table.BuildRowListText(table.DataRows[0], table.RecommendedDisplayColumnIndex));
+    }
+
     private static void CreateTextTable(string path, params string[][] rows)
     {
         var lines = rows.Select(row => string.Join('\t', row));

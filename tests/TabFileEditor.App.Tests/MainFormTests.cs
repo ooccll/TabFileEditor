@@ -1116,6 +1116,36 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void LoadingSchemaHeaderTableShowsPreambleInDetailGrid()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSchemaHeaderTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            Assert.Collection(
+                rowListBox.Items.Cast<object>().Select(item => item.ToString()),
+                item => Assert.Equal("龙首", item),
+                item => Assert.Equal("小兵", item));
+
+            var detailGrid = FindDetailGrid(form);
+            Assert.Equal(2, detailGrid.Columns.Count);
+            Assert.True(detailGrid.Columns[0].ReadOnly);
+            Assert.Equal("第1行", detailGrid.Columns[0].HeaderText);
+            Assert.Equal("值", detailGrid.Columns[1].HeaderText);
+            Assert.False(detailGrid.Columns[1].ReadOnly);
+            Assert.Equal("nIndex", detailGrid.Rows[0].Cells[0].Value);
+            Assert.Equal("0", detailGrid.Rows[0].Cells[1].Value);
+        });
+    }
+
+    [Fact]
     public void DoubleClickingUnselectedValueCellStartsExpandedEditor()
     {
         RunOnStaThread(() =>
@@ -1262,6 +1292,19 @@ public sealed class MainFormTests : IDisposable
             "ID\tIsNormal\tGeneratedBase\tStrengthValue",
             "atInvalid\t{D2-D0}",
             "atAgilityBase\t1\t<text>\t100",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateSchemaHeaderTable()
+    {
+        var path = Path.Combine(_tempDir, "SchemaHeaderTab.xls");
+        var lines = new[]
+        {
+            "nIndex\tszType\tszName\t_Comment\tszBigAvatarPath\tnBigAvatarFrame",
+            "0\tNPC/Longshou/Tower\t龙首\t备注\tui/Image/Common/MobaMessage5.UITex\t8",
+            "1\t\t小兵\t备注\tui/Image/Common/MobaMessage5.UITex\t8",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;

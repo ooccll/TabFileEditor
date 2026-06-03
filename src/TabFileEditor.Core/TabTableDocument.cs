@@ -44,12 +44,12 @@ public sealed class TabTableDocument
     public IReadOnlyList<TabTableRow> Rows { get; }
 
     public IReadOnlyList<TabTableRow> PreambleRows =>
-        HasIdColumn && DataStartRowIndex > 0
+        DataStartRowIndex > 0
             ? _rows.Take(DataStartRowIndex).ToList()
             : [];
 
     public IReadOnlyList<TabTableRow> DataRows =>
-        HasIdColumn
+        DataStartRowIndex > 0
             ? _rows.Skip(DataStartRowIndex).ToList()
             : _rows.ToList();
 
@@ -87,7 +87,7 @@ public sealed class TabTableDocument
         var columnCount = rows.Count == 0 ? 0 : rows.Max(row => row.Cells.Count);
         var columns = BuildColumns(rows, columnCount);
         var hasIdColumn = HasFirstColumnIdHeader(rows);
-        var dataStartRowIndex = hasIdColumn ? FindDataStartRowIndex(rows) : 0;
+        var dataStartRowIndex = FindDataStartRowIndex(rows, columnCount);
         var recommendedDisplayColumnIndex = FindRecommendedDisplayColumnIndex(rows, columnCount);
 
         return new TabTableDocument(
@@ -138,7 +138,7 @@ public sealed class TabTableDocument
             throw new ArgumentException("行不属于当前 tab 表。", nameof(row));
         }
 
-        if (HasIdColumn && index < DataStartRowIndex)
+        if (index < DataStartRowIndex)
         {
             throw new InvalidOperationException("不能删除表头行。");
         }
@@ -203,22 +203,189 @@ public sealed class TabTableDocument
         return rows
             .Take(InspectRowCount)
             .Select(row => GetCellValue(row, 0))
-            .Any(value => value.Contains("ID", StringComparison.OrdinalIgnoreCase));
+            .Any(value => LooksLikeIdHeaderCell(value));
     }
 
-    private static int FindDataStartRowIndex(IReadOnlyList<TabTableRow> rows)
+    private static int FindDataStartRowIndex(IReadOnlyList<TabTableRow> rows, int columnCount)
     {
-        var firstNumericIdRow = rows.FirstOrDefault(row =>
-            long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out _));
-        if (firstNumericIdRow is not null)
+        var lastHeaderRowIndex = -1;
+        var seenSchemaOrIdHeader = false;
+        var inspected = Math.Min(InspectRowCount, rows.Count);
+
+        for (var i = 0; i < inspected; i++)
         {
-            return firstNumericIdRow.RowIndex;
+            var cell0 = GetCellValue(rows[i], 0).Trim();
+
+            if (long.TryParse(cell0, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+            {
+                break;
+            }
+
+            if (LooksLikeDataLikeValue(cell0) && !LooksLikeIdHeaderCell(cell0))
+            {
+                break;
+            }
+
+            if (LooksLikeIdHeaderCell(cell0))
+            {
+                seenSchemaOrIdHeader = true;
+                lastHeaderRowIndex = i;
+            }
+            else if (LooksLikeSchemaHeaderRow(rows[i], columnCount))
+            {
+                seenSchemaOrIdHeader = true;
+                lastHeaderRowIndex = i;
+            }
+            else if (seenSchemaOrIdHeader && IsLikelyTypeOrCommentRow(cell0))
+            {
+                lastHeaderRowIndex = i;
+            }
+            else if (seenSchemaOrIdHeader && HasNonAsciiFirstCell(cell0) && NextRowStartsWithNumeric(rows, i))
+            {
+                lastHeaderRowIndex = i;
+            }
         }
 
-        var idHeaderRow = rows
-            .Take(InspectRowCount)
-            .FirstOrDefault(row => GetCellValue(row, 0).Contains("ID", StringComparison.OrdinalIgnoreCase));
-        return idHeaderRow is not null ? idHeaderRow.RowIndex + 1 : 0;
+        return lastHeaderRowIndex >= 0 ? lastHeaderRowIndex + 1 : 0;
+    }
+
+    private static bool LooksLikeSchemaHeaderRow(TabTableRow row, int columnCount)
+    {
+        if (columnCount <= 2)
+        {
+            return false;
+        }
+
+        var nonEmptyCount = 0;
+        var fieldNameCount = 0;
+        for (var i = 0; i < columnCount && i < row.Cells.Count; i++)
+        {
+            var cell = row.Cells[i].Trim();
+            if (cell.Length == 0)
+            {
+                continue;
+            }
+
+            nonEmptyCount++;
+            if (LooksLikeFieldNameCell(cell))
+            {
+                fieldNameCount++;
+            }
+        }
+
+        return nonEmptyCount >= 3 && fieldNameCount * 5 >= nonEmptyCount * 3;
+    }
+
+    private static bool LooksLikeFieldNameCell(string cell)
+    {
+        if (cell.Length == 0 || cell.Length > 64)
+        {
+            return false;
+        }
+
+        if (LooksLikeDataLikeValue(cell))
+        {
+            return false;
+        }
+
+        if (!char.IsLetter(cell[0]) && cell[0] != '_')
+        {
+            return false;
+        }
+
+        for (var i = 0; i < cell.Length; i++)
+        {
+            if (!char.IsAsciiLetterOrDigit(cell[i]) && cell[i] != '_')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool LooksLikeDataLikeValue(string cell)
+    {
+        if (cell.Length == 0)
+        {
+            return false;
+        }
+
+        if (long.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        {
+            return true;
+        }
+
+        if (double.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        {
+            return true;
+        }
+
+        if (cell.Contains('/'))
+        {
+            return true;
+        }
+
+        if (cell.StartsWith('<') && cell.EndsWith('>'))
+        {
+            return true;
+        }
+
+        if (cell.StartsWith('{') && cell.EndsWith('}'))
+        {
+            return true;
+        }
+
+        if (cell.Length > 2 && cell.StartsWith("at") && char.IsUpper(cell[2]))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeIdHeaderCell(string cell)
+    {
+        return string.Equals(cell.Trim(), "ID", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsLikelyTypeOrCommentRow(string firstCell)
+    {
+        if (string.Equals(firstCell, "int", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(firstCell, "string", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(firstCell, "float", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(firstCell, "bool", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(firstCell, "double", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasNonAsciiFirstCell(string cell)
+    {
+        for (var i = 0; i < cell.Length; i++)
+        {
+            if (cell[i] > 127)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool NextRowStartsWithNumeric(IReadOnlyList<TabTableRow> rows, int currentIndex)
+    {
+        var nextIndex = currentIndex + 1;
+        if (nextIndex >= rows.Count)
+        {
+            return false;
+        }
+
+        var nextCell = GetCellValue(rows[nextIndex], 0).Trim();
+        return long.TryParse(nextCell, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
     }
 
     private static int FindRecommendedDisplayColumnIndex(IReadOnlyList<TabTableRow> rows, int columnCount)
