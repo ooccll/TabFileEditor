@@ -21,7 +21,7 @@ public sealed class TabTableRow
         Cells = cells.ToList();
     }
 
-    public int RowIndex { get; }
+    public int RowIndex { get; internal set; }
 
     public List<string> Cells { get; }
 }

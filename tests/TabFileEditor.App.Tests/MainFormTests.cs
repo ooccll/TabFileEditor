@@ -55,6 +55,7 @@ public sealed class MainFormTests : IDisposable
             Assert.Equal("搜索内容，可用空格隔开多个关键字", rowSearchTextBox.PlaceholderText);
 
             var rowListPanel = Assert.IsType<TableLayoutPanel>(Assert.Single(splitContainer.Panel1.Controls.Cast<Control>()));
+            Assert.Equal(3, rowListPanel.RowCount);
             var displayColumnPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 0));
             Assert.Equal("显示列", Assert.IsType<Label>(displayColumnPanel.GetControlFromPosition(0, 0)).Text);
             Assert.Same(displayColumnComboBox, displayColumnPanel.GetControlFromPosition(1, 0));
@@ -62,11 +63,13 @@ public sealed class MainFormTests : IDisposable
             Assert.NotNull(rowListBox);
             Assert.Equal(Padding.Empty, rowListBox.Margin);
             Assert.Equal(rowListBox.Right, displayColumnComboBox.Right);
+            var buttonPanel = Assert.IsType<FlowLayoutPanel>(rowListPanel.GetControlFromPosition(0, 2));
+            Assert.Equal("删除", Assert.IsType<Button>(buttonPanel.Controls[0]).Text);
+            Assert.Equal("在下方插入", Assert.IsType<Button>(buttonPanel.Controls[1]).Text);
 
             var detailGrid = FindDetailGrid(form);
             Assert.False(detailGrid.AllowUserToAddRows);
             Assert.False(detailGrid.RowHeadersVisible);
-            Assert.Equal(detailGrid.Bottom, rowListBox.Bottom);
 
             var openButton = FindButton(form, "打开表格所在目录");
             var saveButton = FindButton(form, "保存");

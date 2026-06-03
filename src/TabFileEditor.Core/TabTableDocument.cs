@@ -35,12 +35,6 @@ public sealed class TabTableDocument
         HasIdColumn = hasIdColumn;
         DataStartRowIndex = dataStartRowIndex;
         RecommendedDisplayColumnIndex = recommendedDisplayColumnIndex;
-        PreambleRows = hasIdColumn && dataStartRowIndex > 0
-            ? _rows.Take(dataStartRowIndex).ToList()
-            : [];
-        DataRows = hasIdColumn
-            ? _rows.Skip(dataStartRowIndex).ToList()
-            : _rows.ToList();
     }
 
     public string Path { get; }
@@ -49,9 +43,15 @@ public sealed class TabTableDocument
 
     public IReadOnlyList<TabTableRow> Rows { get; }
 
-    public IReadOnlyList<TabTableRow> PreambleRows { get; }
+    public IReadOnlyList<TabTableRow> PreambleRows =>
+        HasIdColumn && DataStartRowIndex > 0
+            ? _rows.Take(DataStartRowIndex).ToList()
+            : [];
 
-    public IReadOnlyList<TabTableRow> DataRows { get; }
+    public IReadOnlyList<TabTableRow> DataRows =>
+        HasIdColumn
+            ? _rows.Skip(DataStartRowIndex).ToList()
+            : _rows.ToList();
 
     public bool HasIdColumn { get; }
 
@@ -112,6 +112,47 @@ public sealed class TabTableDocument
         ValidateCellValue(value);
         EnsureCellExists(row, columnIndex);
         row.Cells[columnIndex] = value;
+    }
+
+    public TabTableRow InsertRowBelow(TabTableRow referenceRow)
+    {
+        var index = _rows.FindIndex(r => ReferenceEquals(r, referenceRow));
+        if (index < 0)
+        {
+            throw new ArgumentException("行不属于当前 tab 表。", nameof(referenceRow));
+        }
+
+        var columnCount = Columns.Count;
+        var cells = Enumerable.Range(0, columnCount).Select(_ => string.Empty).ToList();
+        var newRow = new TabTableRow(0, cells);
+        _rows.Insert(index + 1, newRow);
+        ReindexRows();
+        return newRow;
+    }
+
+    public void DeleteRow(TabTableRow row)
+    {
+        var index = _rows.FindIndex(r => ReferenceEquals(r, row));
+        if (index < 0)
+        {
+            throw new ArgumentException("行不属于当前 tab 表。", nameof(row));
+        }
+
+        if (HasIdColumn && index < DataStartRowIndex)
+        {
+            throw new InvalidOperationException("不能删除表头行。");
+        }
+
+        _rows.RemoveAt(index);
+        ReindexRows();
+    }
+
+    private void ReindexRows()
+    {
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            _rows[i].RowIndex = i;
+        }
     }
 
     public void Save()

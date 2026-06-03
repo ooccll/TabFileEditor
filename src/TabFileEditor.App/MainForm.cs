@@ -45,6 +45,9 @@ public sealed class MainForm : Form
     private readonly TextBox _expandedValueEditorTextBox = new();
     private readonly Button _openTableDirectoryButton = new();
     private readonly Button _saveButton = new();
+    private readonly Button _insertRowButton = new();
+    private readonly Button _deleteRowButton = new();
+    private readonly ContextMenuStrip _rowListBoxContextMenu = new();
     private readonly ToolStripStatusLabel _statusLabel = new();
     private readonly Stack<DetailUndoAction> _undoStack = new();
     private readonly Dictionary<string, int> _detailGridColumnWidths = new();
@@ -206,13 +209,14 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 3,
             BackColor = WindowBg,
             Margin = new Padding(0),
         };
         rowListPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         rowListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         rowListPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        rowListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         _splitContainer.Panel1.Controls.Add(rowListPanel);
 
         rowListPanel.Controls.Add(BuildDisplayColumnPanel(), 0, 0);
@@ -223,8 +227,50 @@ public sealed class MainForm : Form
         _rowListBox.BackColor = PanelBg;
         _rowListBox.ForeColor = TextColor;
         _rowListBox.IntegralHeight = false;
-        _rowListBox.SelectedIndexChanged += (_, _) => RenderSelectedRow();
+        _rowListBox.SelectedIndexChanged += (_, _) =>
+        {
+            RenderSelectedRow();
+            UpdateActionButtons();
+        };
         rowListPanel.Controls.Add(_rowListBox, 0, 1);
+
+        var insertItem = new ToolStripMenuItem("在下方插入");
+        insertItem.Click += (_, _) => InsertRowBelow();
+        _rowListBoxContextMenu.Items.Add(insertItem);
+        _rowListBoxContextMenu.Opening += (_, _) =>
+        {
+            insertItem.Enabled = _document is not null && _rowListBox.SelectedItem is RowListItem;
+        };
+        _rowListBox.ContextMenuStrip = _rowListBoxContextMenu;
+
+        var buttonPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 4, 0, 0),
+            Padding = Padding.Empty,
+            BackColor = WindowBg,
+            WrapContents = false,
+        };
+
+        ConfigureButton(_deleteRowButton, "删除");
+        _deleteRowButton.AutoSize = true;
+        _deleteRowButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _deleteRowButton.Dock = DockStyle.Left;
+        _deleteRowButton.TextAlign = ContentAlignment.MiddleCenter;
+        _deleteRowButton.Padding = new Padding(4, 0, 4, 0);
+        _deleteRowButton.Click += (_, _) => DeleteSelectedRow();
+        buttonPanel.Controls.Add(_deleteRowButton);
+
+        ConfigureButton(_insertRowButton, "在下方插入");
+        _insertRowButton.AutoSize = false;
+        _insertRowButton.Dock = DockStyle.Fill;
+        _insertRowButton.TextAlign = ContentAlignment.MiddleLeft;
+        _insertRowButton.Padding = new Padding(8, 0, 4, 0);
+        _insertRowButton.Click += (_, _) => InsertRowBelow();
+        buttonPanel.Controls.Add(_insertRowButton);
+
+        rowListPanel.Controls.Add(buttonPanel, 0, 2);
     }
 
     private TableLayoutPanel BuildDisplayColumnPanel()
@@ -533,6 +579,53 @@ public sealed class MainForm : Form
         }
 
         return true;
+    }
+
+    private void InsertRowBelow()
+    {
+        if (_document is null || _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var newRow = _document.InsertRowBelow(selectedItem.Row);
+        _isDirty = true;
+        RenderRows(selectFirstWhenAvailable: false, preferredRow: newRow);
+        UpdateActionButtons();
+        SetStatus("已在下方插入新行。");
+    }
+
+    private void DeleteSelectedRow()
+    {
+        if (_document is null || _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var result = MessageBox.Show(
+            this,
+            "确定要删除选中的行吗？",
+            "确认删除",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (result != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var currentIndex = _rowListBox.SelectedIndex;
+        _document.DeleteRow(selectedItem.Row);
+        _isDirty = true;
+
+        var nextPreferred = currentIndex < _rowListBox.Items.Count - 1
+            ? (_rowListBox.Items[currentIndex + 1] as RowListItem)?.Row
+            : currentIndex > 0
+                ? (_rowListBox.Items[currentIndex - 1] as RowListItem)?.Row
+                : null;
+        RenderRows(selectFirstWhenAvailable: nextPreferred is null, preferredRow: nextPreferred);
+        UpdateActionButtons();
+        SetStatus("已删除选中行。");
     }
 
     private void RenderSelectedRow(DetailGridViewportState? viewportState = null)
@@ -1751,6 +1844,12 @@ public sealed class MainForm : Form
 
         _saveButton.Enabled = _document is not null && _isDirty;
         UpdateSaveButtonStyle();
+
+        var canModifyRow = _document is not null && _rowListBox.SelectedItem is RowListItem;
+        _insertRowButton.Enabled = canModifyRow;
+        _insertRowButton.Cursor = canModifyRow ? Cursors.Hand : Cursors.Default;
+        _deleteRowButton.Enabled = canModifyRow;
+        _deleteRowButton.Cursor = canModifyRow ? Cursors.Hand : Cursors.Default;
     }
 
     private void UpdateSaveButtonStyle()
