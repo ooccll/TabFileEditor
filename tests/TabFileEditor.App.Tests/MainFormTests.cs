@@ -63,7 +63,7 @@ public sealed class MainFormTests : IDisposable
             Assert.NotNull(rowListBox);
             Assert.Equal(Padding.Empty, rowListBox.Margin);
             Assert.Equal(rowListBox.Right, displayColumnComboBox.Right);
-            var buttonPanel = Assert.IsType<FlowLayoutPanel>(rowListPanel.GetControlFromPosition(0, 2));
+            var buttonPanel = Assert.IsType<TableLayoutPanel>(rowListPanel.GetControlFromPosition(0, 2));
             Assert.Equal("删除", Assert.IsType<Button>(buttonPanel.Controls[0]).Text);
             Assert.Equal("在下方插入", Assert.IsType<Button>(buttonPanel.Controls[1]).Text);
 

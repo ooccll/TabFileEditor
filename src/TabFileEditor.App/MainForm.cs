@@ -243,15 +243,18 @@ public sealed class MainForm : Form
         };
         _rowListBox.ContextMenuStrip = _rowListBoxContextMenu;
 
-        var buttonPanel = new FlowLayoutPanel
+        var buttonPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
+            ColumnCount = 2,
+            RowCount = 1,
             Margin = new Padding(0, 4, 0, 0),
             Padding = Padding.Empty,
             BackColor = WindowBg,
-            WrapContents = false,
         };
+        buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        buttonPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         ConfigureButton(_deleteRowButton, "删除");
         _deleteRowButton.AutoSize = true;
@@ -260,7 +263,7 @@ public sealed class MainForm : Form
         _deleteRowButton.TextAlign = ContentAlignment.MiddleCenter;
         _deleteRowButton.Padding = new Padding(4, 0, 4, 0);
         _deleteRowButton.Click += (_, _) => DeleteSelectedRow();
-        buttonPanel.Controls.Add(_deleteRowButton);
+        buttonPanel.Controls.Add(_deleteRowButton, 0, 0);
 
         ConfigureButton(_insertRowButton, "在下方插入");
         _insertRowButton.AutoSize = false;
@@ -268,7 +271,7 @@ public sealed class MainForm : Form
         _insertRowButton.TextAlign = ContentAlignment.MiddleLeft;
         _insertRowButton.Padding = new Padding(8, 0, 4, 0);
         _insertRowButton.Click += (_, _) => InsertRowBelow();
-        buttonPanel.Controls.Add(_insertRowButton);
+        buttonPanel.Controls.Add(_insertRowButton, 1, 0);
 
         rowListPanel.Controls.Add(buttonPanel, 0, 2);
     }
