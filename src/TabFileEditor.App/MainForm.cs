@@ -259,8 +259,9 @@ public sealed class MainForm : Form
         ConfigureButton(_insertRowButton, "在下方插入");
         _insertRowButton.AutoSize = false;
         _insertRowButton.Dock = DockStyle.Fill;
+        _insertRowButton.Margin = Padding.Empty;
         _insertRowButton.TextAlign = ContentAlignment.MiddleCenter;
-        _insertRowButton.Padding = new Padding(8, 0, 4, 0);
+        _insertRowButton.Padding = new Padding(4, 0, 4, 0);
         _insertRowButton.Click += (_, _) => InsertRowBelow();
         buttonPanel.Controls.Add(_insertRowButton, 0, 0);
 
