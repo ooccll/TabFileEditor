@@ -210,7 +210,15 @@ public sealed class TabTableDocument
     {
         var firstNumericIdRow = rows.FirstOrDefault(row =>
             long.TryParse(GetCellValue(row, 0).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out _));
-        return firstNumericIdRow?.RowIndex ?? 0;
+        if (firstNumericIdRow is not null)
+        {
+            return firstNumericIdRow.RowIndex;
+        }
+
+        var idHeaderRow = rows
+            .Take(InspectRowCount)
+            .FirstOrDefault(row => GetCellValue(row, 0).Contains("ID", StringComparison.OrdinalIgnoreCase));
+        return idHeaderRow is not null ? idHeaderRow.RowIndex + 1 : 0;
     }
 
     private static int FindRecommendedDisplayColumnIndex(IReadOnlyList<TabTableRow> rows, int columnCount)

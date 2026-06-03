@@ -1086,6 +1086,36 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void LoadingStringKeyTableShowsStringKeysInLeftListAndIdPreambleInDetailGrid()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateStringKeyTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            Assert.Collection(
+                rowListBox.Items.Cast<object>().Select(item => item.ToString()),
+                item => Assert.Equal("atInvalid", item),
+                item => Assert.Equal("atAgilityBase", item));
+
+            var detailGrid = FindDetailGrid(form);
+            Assert.Equal(2, detailGrid.Columns.Count);
+            Assert.True(detailGrid.Columns[0].ReadOnly);
+            Assert.Equal("第1行", detailGrid.Columns[0].HeaderText);
+            Assert.Equal("值", detailGrid.Columns[1].HeaderText);
+            Assert.False(detailGrid.Columns[1].ReadOnly);
+            Assert.Equal("ID", detailGrid.Rows[0].Cells[0].Value);
+            Assert.Equal("atInvalid", detailGrid.Rows[0].Cells[1].Value);
+        });
+    }
+
+    [Fact]
     public void DoubleClickingUnselectedValueCellStartsExpandedEditor()
     {
         RunOnStaThread(() =>
@@ -1219,6 +1249,19 @@ public sealed class MainFormTests : IDisposable
             "int\tstring\tstring",
             "0\t\t默认行",
             "1\tFirstQuest\t第一条",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateStringKeyTable()
+    {
+        var path = Path.Combine(_tempDir, "StringKeyTab.xls");
+        var lines = new[]
+        {
+            "ID\tIsNormal\tGeneratedBase\tStrengthValue",
+            "atInvalid\t{D2-D0}",
+            "atAgilityBase\t1\t<text>\t100",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;

@@ -204,6 +204,61 @@ public sealed class TabTableDocumentTests : IDisposable
         Assert.Throws<ArgumentException>(() => table.SetCellValue(table.DataRows[0], 1, value));
     }
 
+    [Fact]
+    public void LoadsStringKeyTableWithIdHeaderAsPreamble()
+    {
+        var path = Path.Combine(_tempDir, "StringKeyTab.xls");
+        CreateTextTable(
+            path,
+            ["ID", "IsNormal", "GeneratedBase", "StrengthValue"],
+            ["atInvalid", "{D2-D0}"],
+            ["atAgilityBase", "1", "<text>", "100"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.True(table.HasIdColumn);
+        Assert.Equal(1, table.DataStartRowIndex);
+        Assert.Single(table.PreambleRows);
+        Assert.Equal("ID", table.PreambleRows[0].Cells[0]);
+        Assert.Equal(2, table.DataRows.Count);
+        Assert.Equal("atInvalid", table.DataRows[0].Cells[0]);
+        Assert.Equal("atAgilityBase", table.DataRows[1].Cells[0]);
+    }
+
+    [Fact]
+    public void StringKeyTableBuildRowListTextUsesRawValue()
+    {
+        var path = Path.Combine(_tempDir, "StringKeyDisplay.tab");
+        CreateTextTable(
+            path,
+            ["ID", "Name"],
+            ["atFoo", "FooName"],
+            ["atBar", ""]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.Equal("FooName", table.BuildRowListText(table.DataRows[0], 1));
+        Assert.Equal("第3行", table.BuildRowListText(table.DataRows[1], 1));
+    }
+
+    [Fact]
+    public void StringKeyTableDeleteRowProtectsIdHeader()
+    {
+        var path = Path.Combine(_tempDir, "StringKeyDelete.tab");
+        CreateTextTable(
+            path,
+            ["ID", "Name"],
+            ["atFoo", "FooName"],
+            ["atBar", "BarName"]);
+
+        var table = TabTableDocument.Load(path);
+
+        Assert.Throws<InvalidOperationException>(() => table.DeleteRow(table.PreambleRows[0]));
+        table.DeleteRow(table.DataRows[0]);
+        Assert.Single(table.DataRows);
+        Assert.Equal("atBar", table.DataRows[0].Cells[0]);
+    }
+
     private static void CreateTextTable(string path, params string[][] rows)
     {
         var lines = rows.Select(row => string.Join('\t', row));
