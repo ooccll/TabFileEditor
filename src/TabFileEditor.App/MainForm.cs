@@ -1447,12 +1447,14 @@ public sealed class MainForm : Form
 
         if (isCurrentCell)
         {
-            DrawCurrentDetailCellBorder(e);
-        }
-
-        if (IsContiguousSelection())
-        {
-            DrawSelectionBorder(e);
+            if (IsContiguousSelection())
+            {
+                DrawSelectionBorder(e);
+            }
+            else
+            {
+                DrawCurrentDetailCellBorder(e);
+            }
         }
 
         e.Handled = true;
