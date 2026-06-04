@@ -1450,6 +1450,11 @@ public sealed class MainForm : Form
             DrawCurrentDetailCellBorder(e);
         }
 
+        if (IsContiguousSelection())
+        {
+            DrawSelectionBorder(e);
+        }
+
         e.Handled = true;
     }
 
@@ -1595,6 +1600,72 @@ public sealed class MainForm : Form
         borderRectangle.Inflate(-1, -1);
         using var pen = new Pen(CurrentCellBorderColor, 2);
         e.Graphics!.DrawRectangle(pen, borderRectangle);
+    }
+
+    private bool IsContiguousSelection()
+    {
+        var selectedCells = _detailGrid.SelectedCells;
+        if (selectedCells.Count <= 1)
+        {
+            return false;
+        }
+
+        var minRowIndex = int.MaxValue;
+        var maxRowIndex = int.MinValue;
+        var minColumnIndex = int.MaxValue;
+        var maxColumnIndex = int.MinValue;
+
+        foreach (DataGridViewCell cell in selectedCells)
+        {
+            if (cell.RowIndex < minRowIndex) minRowIndex = cell.RowIndex;
+            if (cell.RowIndex > maxRowIndex) maxRowIndex = cell.RowIndex;
+            if (cell.ColumnIndex < minColumnIndex) minColumnIndex = cell.ColumnIndex;
+            if (cell.ColumnIndex > maxColumnIndex) maxColumnIndex = cell.ColumnIndex;
+        }
+
+        var expectedCount = (maxRowIndex - minRowIndex + 1) * (maxColumnIndex - minColumnIndex + 1);
+        return selectedCells.Count == expectedCount;
+    }
+
+    private void DrawSelectionBorder(DataGridViewCellPaintingEventArgs e)
+    {
+        var selectedCells = _detailGrid.SelectedCells;
+        if (selectedCells.Count <= 1)
+        {
+            return;
+        }
+
+        var minRowIndex = int.MaxValue;
+        var maxRowIndex = int.MinValue;
+        var minColumnIndex = int.MaxValue;
+        var maxColumnIndex = int.MinValue;
+
+        foreach (DataGridViewCell cell in selectedCells)
+        {
+            if (cell.RowIndex < minRowIndex) minRowIndex = cell.RowIndex;
+            if (cell.RowIndex > maxRowIndex) maxRowIndex = cell.RowIndex;
+            if (cell.ColumnIndex < minColumnIndex) minColumnIndex = cell.ColumnIndex;
+            if (cell.ColumnIndex > maxColumnIndex) maxColumnIndex = cell.ColumnIndex;
+        }
+
+        var topLeftBounds = _detailGrid.GetCellDisplayRectangle(minColumnIndex, minRowIndex, false);
+        var bottomRightBounds = _detailGrid.GetCellDisplayRectangle(maxColumnIndex, maxRowIndex, false);
+
+        if (topLeftBounds.Width <= 0 || topLeftBounds.Height <= 0 ||
+            bottomRightBounds.Width <= 0 || bottomRightBounds.Height <= 0)
+        {
+            return;
+        }
+
+        var selectionRect = new Rectangle(
+            topLeftBounds.Left,
+            topLeftBounds.Top,
+            bottomRightBounds.Right - topLeftBounds.Left,
+            bottomRightBounds.Bottom - topLeftBounds.Top);
+
+        selectionRect.Inflate(-1, -1);
+        using var pen = new Pen(CurrentCellBorderColor, 2);
+        e.Graphics!.DrawRectangle(pen, selectionRect);
     }
 
     private void DetailGridKeyPress(object? sender, KeyPressEventArgs e)
