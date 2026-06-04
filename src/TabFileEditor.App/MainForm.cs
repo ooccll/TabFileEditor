@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using TabFileEditor.Core;
 
 namespace TabFileEditor.App;
@@ -88,6 +89,7 @@ public sealed class MainForm : Form
     {
         base.OnShown(e);
         InitializeSplitterDistance();
+        TryLoadLastOpenedFile();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -652,6 +654,7 @@ public sealed class MainForm : Form
             PopulateTitleRowSelector();
             RenderRows(selectFirstWhenAvailable: true);
             SetStatus($"已加载 {_document.DisplayName}，共 {_document.DataRows.Count} 行。");
+            SaveSettings(new AppSettings(_document.Path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
         {
@@ -2261,4 +2264,42 @@ public sealed class MainForm : Form
         int? FirstDisplayedScrollingColumnIndex,
         int? CurrentCellRowIndex,
         int? CurrentCellColumnIndex);
+
+    private sealed record AppSettings(string? LastOpenedFilePath);
+
+    private static string GetSettingsFilePath()
+    {
+        return Path.Combine(Path.GetDirectoryName(Environment.ProcessPath)!, "填tab表工具.config.json");
+    }
+
+    private static AppSettings LoadSettings()
+    {
+        try
+        {
+            var path = GetSettingsFilePath();
+            if (!File.Exists(path)) return new AppSettings(null);
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings(null);
+        }
+        catch { return new AppSettings(null); }
+    }
+
+    private static void SaveSettings(AppSettings settings)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(GetSettingsFilePath(), json);
+        }
+        catch { }
+    }
+
+    private void TryLoadLastOpenedFile()
+    {
+        var settings = LoadSettings();
+        if (string.IsNullOrWhiteSpace(settings.LastOpenedFilePath)) return;
+        if (!File.Exists(settings.LastOpenedFilePath)) return;
+        _filePathTextBox.Text = settings.LastOpenedFilePath;
+        LoadCurrentFile();
+    }
 }

@@ -2,5 +2,5 @@ bin/
 obj/
 TestResults/
 .vs/
-config.json
+填tab表工具.config.json
 *.user
