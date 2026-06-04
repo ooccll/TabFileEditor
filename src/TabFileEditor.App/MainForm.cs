@@ -51,11 +51,11 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _statusLabel = new();
     private readonly Stack<DetailUndoAction> _undoStack = new();
     private readonly Dictionary<string, int> _detailGridColumnWidths = new();
-    private readonly Button _titleColumnSelectorButton = new();
-    private readonly CheckedListBox _titleColumnCheckedListBox = new();
-    private readonly ToolStripDropDown _titleColumnDropDown = new();
-    private readonly HashSet<int> _selectedTitleColumnIndexes = new();
-    private bool _updatingTitleColumnSelection;
+    private readonly Button _titleRowSelectorButton = new();
+    private readonly CheckedListBox _titleRowCheckedListBox = new();
+    private readonly ToolStripDropDown _titleRowDropDown = new();
+    private readonly HashSet<int> _selectedTitleRowIndexes = new();
+    private bool _updatingTitleRowSelection;
 
     private TabTableDocument? _document;
     private bool _isDirty;
@@ -358,12 +358,12 @@ public sealed class MainForm : Form
         detailPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         detailPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         detailPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        detailPanel.Controls.Add(BuildTitleColumnSelectorPanel(), 0, 0);
+        detailPanel.Controls.Add(BuildTitleRowSelectorPanel(), 0, 0);
         detailPanel.Controls.Add(_detailGrid, 0, 1);
         _splitContainer.Panel2.Controls.Add(detailPanel);
     }
 
-    private TableLayoutPanel BuildTitleColumnSelectorPanel()
+    private TableLayoutPanel BuildTitleRowSelectorPanel()
     {
         var panel = new TableLayoutPanel
         {
@@ -377,159 +377,175 @@ public sealed class MainForm : Form
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        panel.Controls.Add(BuildLabel("标题列"), 0, 0);
+        panel.Controls.Add(BuildLabel("标题行"), 0, 0);
 
-        _titleColumnSelectorButton.Text = "未选择";
-        _titleColumnSelectorButton.Dock = DockStyle.Fill;
-        _titleColumnSelectorButton.FlatStyle = FlatStyle.Flat;
-        _titleColumnSelectorButton.BackColor = PanelBg;
-        _titleColumnSelectorButton.ForeColor = TextColor;
-        _titleColumnSelectorButton.FlatAppearance.BorderColor = BorderColor;
-        _titleColumnSelectorButton.Margin = new Padding(0, 2, 0, 2);
-        _titleColumnSelectorButton.TextAlign = ContentAlignment.MiddleLeft;
-        _titleColumnSelectorButton.Padding = new Padding(6, 0, 6, 0);
-        _titleColumnSelectorButton.Enabled = false;
-        _titleColumnSelectorButton.Click += (_, _) => ShowTitleColumnDropDown();
-        panel.Controls.Add(_titleColumnSelectorButton, 1, 0);
+        _titleRowSelectorButton.Text = "未选择";
+        _titleRowSelectorButton.Dock = DockStyle.Fill;
+        _titleRowSelectorButton.FlatStyle = FlatStyle.Flat;
+        _titleRowSelectorButton.BackColor = PanelBg;
+        _titleRowSelectorButton.ForeColor = TextColor;
+        _titleRowSelectorButton.FlatAppearance.BorderColor = BorderColor;
+        _titleRowSelectorButton.Margin = new Padding(0, 2, 0, 2);
+        _titleRowSelectorButton.TextAlign = ContentAlignment.MiddleLeft;
+        _titleRowSelectorButton.Padding = new Padding(6, 0, 6, 0);
+        _titleRowSelectorButton.Enabled = false;
+        _titleRowSelectorButton.Click += (_, _) => ShowTitleRowDropDown();
+        panel.Controls.Add(_titleRowSelectorButton, 1, 0);
 
-        ConfigureTitleColumnDropDown();
+        ConfigureTitleRowDropDown();
         return panel;
     }
 
-    private void ConfigureTitleColumnDropDown()
+    private void ConfigureTitleRowDropDown()
     {
-        _titleColumnCheckedListBox.CheckOnClick = true;
-        _titleColumnCheckedListBox.ItemCheck += TitleColumnCheckedListBoxItemCheck;
+        _titleRowCheckedListBox.CheckOnClick = true;
+        _titleRowCheckedListBox.ItemCheck += TitleRowCheckedListBoxItemCheck;
 
-        var host = new ToolStripControlHost(_titleColumnCheckedListBox)
+        var host = new ToolStripControlHost(_titleRowCheckedListBox)
         {
             AutoSize = false,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
         };
-        _titleColumnDropDown.Items.Add(host);
-        _titleColumnDropDown.Width = 320;
-        _titleColumnDropDown.Height = 260;
+        _titleRowDropDown.Items.Add(host);
+        _titleRowDropDown.Width = 320;
+        _titleRowDropDown.Height = 260;
     }
 
-    private void ShowTitleColumnDropDown()
+    private void ShowTitleRowDropDown()
     {
-        if (!_titleColumnSelectorButton.Enabled)
+        if (!_titleRowSelectorButton.Enabled)
         {
             return;
         }
 
-        _titleColumnDropDown.Show(_titleColumnSelectorButton, new Point(0, _titleColumnSelectorButton.Height));
+        _titleRowDropDown.Show(_titleRowSelectorButton, new Point(0, _titleRowSelectorButton.Height));
     }
 
-    private void PopulateTitleColumnSelector()
+    private void PopulateTitleRowSelector()
     {
-        _titleColumnCheckedListBox.Items.Clear();
-        _selectedTitleColumnIndexes.Clear();
+        _titleRowCheckedListBox.Items.Clear();
+        _selectedTitleRowIndexes.Clear();
 
-        if (_document is null || _document.Columns.Count == 0)
+        if (_document is null || _document.Rows.Count == 0)
         {
-            _titleColumnSelectorButton.Enabled = false;
-            _titleColumnSelectorButton.Text = "未选择";
+            _titleRowSelectorButton.Enabled = false;
+            _titleRowSelectorButton.Text = "未选择";
             return;
         }
 
-        foreach (var column in _document.Columns)
+        _updatingTitleRowSelection = true;
+        try
         {
-            _titleColumnCheckedListBox.Items.Add(new DisplayColumnItem(column));
+            var maxRowIndex = Math.Min(_document.Rows.Count, 10);
+            for (var i = 0; i < maxRowIndex; i++)
+            {
+                var row = _document.Rows[i];
+                var isPreamble = i < _document.DataStartRowIndex;
+                _titleRowCheckedListBox.Items.Add(new DisplayRowItem(row), isPreamble);
+                if (isPreamble)
+                {
+                    _selectedTitleRowIndexes.Add(i);
+                }
+            }
+        }
+        finally
+        {
+            _updatingTitleRowSelection = false;
         }
 
-        _titleColumnSelectorButton.Enabled = true;
-        UpdateTitleColumnSelectorButtonText();
+        _titleRowSelectorButton.Enabled = true;
+        UpdateTitleRowSelectorButtonText();
     }
 
-    private void ClearTitleColumnSelector()
+    private void ClearTitleRowSelector()
     {
-        _titleColumnCheckedListBox.Items.Clear();
-        _selectedTitleColumnIndexes.Clear();
-        _titleColumnSelectorButton.Enabled = false;
-        _titleColumnSelectorButton.Text = "未选择";
+        _titleRowCheckedListBox.Items.Clear();
+        _selectedTitleRowIndexes.Clear();
+        _titleRowSelectorButton.Enabled = false;
+        _titleRowSelectorButton.Text = "未选择";
     }
 
-    private void TitleColumnCheckedListBoxItemCheck(object? sender, ItemCheckEventArgs e)
+    private void TitleRowCheckedListBoxItemCheck(object? sender, ItemCheckEventArgs e)
     {
-        if (_updatingTitleColumnSelection)
+        if (_updatingTitleRowSelection)
         {
             return;
         }
 
-        _updatingTitleColumnSelection = true;
+        _updatingTitleRowSelection = true;
         BeginInvoke(() =>
         {
-            _updatingTitleColumnSelection = false;
-            _selectedTitleColumnIndexes.Clear();
-            for (var i = 0; i < _titleColumnCheckedListBox.CheckedItems.Count; i++)
+            _updatingTitleRowSelection = false;
+            _selectedTitleRowIndexes.Clear();
+            for (var i = 0; i < _titleRowCheckedListBox.CheckedItems.Count; i++)
             {
-                if (_titleColumnCheckedListBox.CheckedItems[i] is DisplayColumnItem item)
+                if (_titleRowCheckedListBox.CheckedItems[i] is DisplayRowItem item)
                 {
-                    _selectedTitleColumnIndexes.Add(item.Column.Index);
+                    _selectedTitleRowIndexes.Add(item.Row.RowIndex);
                 }
             }
 
             var currentIndex = e.Index;
             var currentChecked = e.NewValue == CheckState.Checked;
-            if (_titleColumnCheckedListBox.Items[currentIndex] is DisplayColumnItem currentItem)
+            if (_titleRowCheckedListBox.Items[currentIndex] is DisplayRowItem currentItem)
             {
                 if (currentChecked)
                 {
-                    _selectedTitleColumnIndexes.Add(currentItem.Column.Index);
+                    _selectedTitleRowIndexes.Add(currentItem.Row.RowIndex);
                 }
                 else
                 {
-                    _selectedTitleColumnIndexes.Remove(currentItem.Column.Index);
+                    _selectedTitleRowIndexes.Remove(currentItem.Row.RowIndex);
                 }
             }
 
-            UpdateTitleColumnSelectorButtonText();
+            UpdateTitleRowSelectorButtonText();
             RenderSelectedRow();
         });
     }
 
-    private void UpdateTitleColumnSelectorButtonText()
+    private void UpdateTitleRowSelectorButtonText()
     {
-        var count = _selectedTitleColumnIndexes.Count;
+        var count = _selectedTitleRowIndexes.Count;
         if (count == 0)
         {
-            _titleColumnSelectorButton.Text = "未选择";
+            _titleRowSelectorButton.Text = "未选择";
             return;
         }
 
-        var selectedNames = _titleColumnCheckedListBox.CheckedItems
-            .Cast<DisplayColumnItem>()
-            .Select(item => item.Column.Title)
+        var selectedNames = _titleRowCheckedListBox.CheckedItems
+            .Cast<DisplayRowItem>()
+            .Select(item => $"第{item.Row.RowIndex + 1}行")
             .ToList();
 
         if (count == 1)
         {
-            _titleColumnSelectorButton.Text = selectedNames[0];
+            _titleRowSelectorButton.Text = selectedNames[0];
         }
         else if (count == 2)
         {
-            _titleColumnSelectorButton.Text = $"{selectedNames[0]}, {selectedNames[1]}";
+            _titleRowSelectorButton.Text = $"{selectedNames[0]}, {selectedNames[1]}";
         }
         else
         {
-            _titleColumnSelectorButton.Text = $"{selectedNames[0]}, {selectedNames[1]} 等 {count} 列";
+            _titleRowSelectorButton.Text = $"{selectedNames[0]}, {selectedNames[1]} 等 {count} 行";
         }
     }
 
-    private IEnumerable<int> GetSelectedTitleColumnIndexesInDocumentOrder()
+    private IEnumerable<int> GetSelectedTitleRowIndexesInDocumentOrder()
     {
         if (_document is null)
         {
             yield break;
         }
 
-        foreach (var column in _document.Columns)
+        var maxRowIndex = Math.Min(_document.Rows.Count, 10);
+        for (var i = 0; i < maxRowIndex; i++)
         {
-            if (_selectedTitleColumnIndexes.Contains(column.Index))
+            if (_selectedTitleRowIndexes.Contains(i))
             {
-                yield return column.Index;
+                yield return i;
             }
         }
     }
@@ -636,7 +652,7 @@ public sealed class MainForm : Form
             _detailGridColumnWidths.Clear();
             _rowSearchTextBox.Clear();
             PopulateDisplayColumnComboBox();
-            PopulateTitleColumnSelector();
+            PopulateTitleRowSelector();
             RenderRows(selectFirstWhenAvailable: true);
             SetStatus($"已加载 {_document.DisplayName}，共 {_document.DataRows.Count} 行。");
         }
@@ -647,7 +663,7 @@ public sealed class MainForm : Form
             _undoStack.Clear();
             _displayColumnComboBox.Items.Clear();
             _displayColumnComboBox.Enabled = false;
-            ClearTitleColumnSelector();
+            ClearTitleRowSelector();
             ClearRowsAndDetails();
             SetStatus($"加载失败：{ex.Message}");
             MessageBox.Show(this, $"加载失败。\n\n{ex.Message}", "加载失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -853,15 +869,10 @@ public sealed class MainForm : Form
                 gridRow.Tag = column.Index;
 
                 var gridColumnIndex = 0;
-                foreach (var titleColumnIndex in GetSelectedTitleColumnIndexesInDocumentOrder())
+                foreach (var titleRowIndex in GetSelectedTitleRowIndexesInDocumentOrder())
                 {
-                    gridRow.Cells[gridColumnIndex].Value = TabTableDocument.GetCellValue(selectedItem.Row, titleColumnIndex);
-                    gridColumnIndex++;
-                }
-
-                foreach (var preambleRow in _document.PreambleRows)
-                {
-                    gridRow.Cells[gridColumnIndex].Value = TabTableDocument.GetCellValue(preambleRow, column.Index);
+                    gridRow.Cells[gridColumnIndex].Value = TabTableDocument.GetCellValue(
+                        _document.Rows[titleRowIndex], column.Index);
                     gridColumnIndex++;
                 }
 
@@ -1004,23 +1015,11 @@ public sealed class MainForm : Form
     {
         if (_document is not null)
         {
-            foreach (var titleColumnIndex in GetSelectedTitleColumnIndexesInDocumentOrder())
-            {
-                var column = _document.Columns.FirstOrDefault(c => c.Index == titleColumnIndex);
-                if (column is not null)
-                {
-                    _detailGrid.Columns.Add(BuildReadOnlyTextColumn(
-                        $"TitleColumn{titleColumnIndex}",
-                        column.Title,
-                        140));
-                }
-            }
-
-            foreach (var preambleRow in _document.PreambleRows)
+            foreach (var titleRowIndex in GetSelectedTitleRowIndexesInDocumentOrder())
             {
                 _detailGrid.Columns.Add(BuildReadOnlyTextColumn(
-                    $"Preamble{preambleRow.RowIndex}",
-                    $"第{preambleRow.RowIndex + 1}行",
+                    $"TitleRow{titleRowIndex}",
+                    $"第{titleRowIndex + 1}行",
                     180));
             }
         }
@@ -2141,6 +2140,22 @@ public sealed class MainForm : Form
         public override string ToString()
         {
             return $"第{Column.Index + 1}列 - {Column.Title}";
+        }
+    }
+
+    private sealed class DisplayRowItem
+    {
+        public DisplayRowItem(TabTableRow row)
+        {
+            Row = row;
+        }
+
+        public TabTableRow Row { get; }
+
+        public override string ToString()
+        {
+            var preview = string.Join("\t", Row.Cells.Take(3));
+            return $"第{Row.RowIndex + 1}行 - {preview}";
         }
     }
 

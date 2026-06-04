@@ -235,7 +235,7 @@ public sealed class MainFormTests : IDisposable
 
             var detailGrid = FindDetailGrid(form);
             var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
-            var preambleColumnIndex = detailGrid.Columns["Preamble0"]!.Index;
+            var preambleColumnIndex = detailGrid.Columns["TitleRow0"]!.Index;
             var pathValue = Assert.IsType<string>(detailGrid.Rows[2].Cells["Value"].Value);
             var pathStart = pathValue.IndexOf("path", StringComparison.OrdinalIgnoreCase);
 
@@ -942,7 +942,7 @@ public sealed class MainFormTests : IDisposable
             var rowListBox = FindDescendant<ListBox>(form);
             Assert.NotNull(rowListBox);
             var detailGrid = FindDetailGrid(form);
-            var preambleColumn = detailGrid.Columns["Preamble0"]!;
+            var preambleColumn = detailGrid.Columns["TitleRow0"]!;
             var defaultWidth = preambleColumn.Width;
             const int manualWidth = 260;
             Assert.NotEqual(manualWidth, defaultWidth);
@@ -950,11 +950,11 @@ public sealed class MainFormTests : IDisposable
             preambleColumn.Width = manualWidth;
             rowListBox.SelectedIndex = 1;
 
-            Assert.Equal(manualWidth, detailGrid.Columns["Preamble0"]!.Width);
+            Assert.Equal(manualWidth, detailGrid.Columns["TitleRow0"]!.Width);
 
             InvokePrivate(form, "LoadCurrentFile");
 
-            Assert.Equal(defaultWidth, detailGrid.Columns["Preamble0"]!.Width);
+            Assert.Equal(defaultWidth, detailGrid.Columns["TitleRow0"]!.Width);
         });
     }
 
