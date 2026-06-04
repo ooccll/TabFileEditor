@@ -368,12 +368,13 @@ public sealed class MainForm : Form
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 3,
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(0, 0, 0, 4),
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -408,8 +409,8 @@ public sealed class MainForm : Form
             Padding = Padding.Empty,
         };
         _titleRowDropDown.Items.Add(host);
-        _titleRowDropDown.Width = 320;
-        _titleRowDropDown.Height = 260;
+        _titleRowDropDown.Width = 500;
+        _titleRowDropDown.Height = 300;
     }
 
     private void ShowTitleRowDropDown()
