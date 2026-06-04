@@ -206,6 +206,7 @@ public sealed class MainForm : Form
 
         BuildRowListPanel();
         ConfigureDetailGrid();
+        _splitContainer.Panel2.Padding = new Padding(0, 0, 4, 0);
     }
 
     private void BuildRowListPanel()
@@ -292,7 +293,7 @@ public sealed class MainForm : Form
             BackColor = WindowBg,
             Margin = new Padding(0, 0, 0, 6),
         };
-        displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));
+        displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
         displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         displayColumnPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -368,13 +369,12 @@ public sealed class MainForm : Form
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 2,
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(0, 0, 0, 4),
         };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -386,7 +386,7 @@ public sealed class MainForm : Form
         _titleRowSelectorButton.BackColor = PanelBg;
         _titleRowSelectorButton.ForeColor = TextColor;
         _titleRowSelectorButton.FlatAppearance.BorderColor = BorderColor;
-        _titleRowSelectorButton.Margin = new Padding(0, 2, 0, 2);
+        _titleRowSelectorButton.Margin = new Padding(0, 0, 0, 0);
         _titleRowSelectorButton.TextAlign = ContentAlignment.MiddleLeft;
         _titleRowSelectorButton.Padding = new Padding(6, 0, 6, 0);
         _titleRowSelectorButton.Enabled = false;
@@ -405,12 +405,19 @@ public sealed class MainForm : Form
         var host = new ToolStripControlHost(_titleRowCheckedListBox)
         {
             AutoSize = false,
+            Size = new Size(580, 380),
             Margin = Padding.Empty,
             Padding = Padding.Empty,
         };
         _titleRowDropDown.Items.Add(host);
+        _titleRowDropDown.AutoSize = false;
         _titleRowDropDown.Width = 500;
         _titleRowDropDown.Height = 300;
+        _titleRowDropDown.Opening += (_, _) =>
+        {
+            host.Size = new Size(_titleRowDropDown.Width, _titleRowDropDown.Height);
+            _titleRowCheckedListBox.Size = host.Size;
+        };
     }
 
     private void ShowTitleRowDropDown()
