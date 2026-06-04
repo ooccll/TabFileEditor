@@ -206,7 +206,7 @@ public sealed class MainForm : Form
 
         BuildRowListPanel();
         ConfigureDetailGrid();
-        _splitContainer.Panel2.Padding = new Padding(0, 0, 4, 0);
+        _splitContainer.Panel2.Padding = new Padding(0, 0, 6, 0);
     }
 
     private void BuildRowListPanel()
@@ -527,18 +527,7 @@ public sealed class MainForm : Form
             .Select(item => $"第{item.Row.RowIndex + 1}行")
             .ToList();
 
-        if (count == 1)
-        {
-            _titleRowSelectorButton.Text = selectedNames[0];
-        }
-        else if (count == 2)
-        {
-            _titleRowSelectorButton.Text = $"{selectedNames[0]}, {selectedNames[1]}";
-        }
-        else
-        {
-            _titleRowSelectorButton.Text = $"{selectedNames[0]}, {selectedNames[1]} 等 {count} 行";
-        }
+        _titleRowSelectorButton.Text = string.Join(", ", selectedNames);
     }
 
     private IEnumerable<int> GetSelectedTitleRowIndexesInDocumentOrder()
