@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using TabFileEditor.Core;
@@ -44,6 +45,7 @@ public sealed class MainForm : Form
     private readonly ListBox _rowListBox = new();
     private readonly DataGridView _detailGrid = new();
     private readonly TextBox _expandedValueEditorTextBox = new();
+    private readonly Button _timeFieldButton = new();
     private readonly Button _openTableDirectoryButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _insertRowButton = new();
@@ -348,6 +350,7 @@ public sealed class MainForm : Form
         _detailGrid.KeyDown += DetailGridKeyDown;
         _detailGrid.KeyPress += DetailGridKeyPress;
         _detailGrid.CurrentCellChanged += DetailGridCurrentCellChanged;
+        _detailGrid.Scroll += DetailGridScroll;
         ConfigureExpandedValueEditor();
 
         var detailPanel = new TableLayoutPanel
@@ -564,6 +567,152 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.KeyDown += ExpandedValueEditorTextBoxKeyDown;
         _expandedValueEditorTextBox.Leave += (_, _) => CommitExpandedValueEditor();
         _detailGrid.Controls.Add(_expandedValueEditorTextBox);
+        ConfigureTimeFieldButton();
+    }
+
+    private static readonly HashSet<string> TimeFieldNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "nPreTime",
+        "szStartTime",
+        "szEndTime",
+        "nResTime",
+    };
+
+    private void ConfigureTimeFieldButton()
+    {
+        _timeFieldButton.Text = "设置";
+        _timeFieldButton.Visible = false;
+        _timeFieldButton.FlatStyle = FlatStyle.Flat;
+        _timeFieldButton.BackColor = PanelBg;
+        _timeFieldButton.ForeColor = TextColor;
+        _timeFieldButton.FlatAppearance.BorderColor = BorderColor;
+        _timeFieldButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
+        _timeFieldButton.AutoSize = true;
+        _timeFieldButton.AutoSizeMode = AutoSizeMode.GrowOnly;
+        _timeFieldButton.MinimumSize = new Size(50, DetailGridRowHeight);
+        _timeFieldButton.Cursor = Cursors.Hand;
+        _timeFieldButton.Click += (_, _) => OpenTimePickerDialog();
+        _detailGrid.Controls.Add(_timeFieldButton);
+    }
+
+    private void UpdateTimeFieldButtonVisibility()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            tableColumnIndex < 0 ||
+            tableColumnIndex >= _document.Columns.Count ||
+            !TimeFieldNames.Contains(_document.Columns[tableColumnIndex].Title))
+        {
+            HideTimeFieldButton();
+            return;
+        }
+
+        ShowTimeFieldButton(currentCell.RowIndex);
+    }
+
+    private void ShowTimeFieldButton(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _detailGrid.Rows.Count)
+        {
+            HideTimeFieldButton();
+            return;
+        }
+
+        _timeFieldButton.Visible = true;
+        _timeFieldButton.BringToFront();
+        UpdateTimeFieldButtonPosition();
+    }
+
+    private void UpdateTimeFieldButtonPosition()
+    {
+        if (!_timeFieldButton.Visible ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0 } currentCell)
+        {
+            return;
+        }
+
+        var valueColumnIndex = _detailGrid.Columns.Count - 1;
+        var cellBounds = GetValueCellDisplayBounds(currentCell.RowIndex, valueColumnIndex);
+        var buttonWidth = _timeFieldButton.Width;
+
+        _timeFieldButton.Location = new Point(
+            cellBounds.Right - buttonWidth,
+            cellBounds.Top);
+    }
+
+    private void HideTimeFieldButton()
+    {
+        _timeFieldButton.Visible = false;
+    }
+
+    private void OpenTimePickerDialog()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var currentValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex).Trim();
+        var initialDateTime = DateTime.Now;
+        if (long.TryParse(currentValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var timestamp) &&
+            timestamp > 0)
+        {
+            try
+            {
+                initialDateTime = DateTimeOffset.FromUnixTimeSeconds(timestamp).LocalDateTime;
+            }
+            catch
+            {
+                // 解析失败时使用当前时间
+            }
+        }
+
+        using var form = new DateTimePickerForm(initialDateTime);
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var selectedDateTime = form.SelectedDateTime;
+        var newTimestamp = new DateTimeOffset(
+            selectedDateTime.Year,
+            selectedDateTime.Month,
+            selectedDateTime.Day,
+            selectedDateTime.Hour,
+            selectedDateTime.Minute,
+            selectedDateTime.Second,
+            TimeSpan.Zero).ToUnixTimeSeconds();
+        var newValue = newTimestamp.ToString(CultureInfo.InvariantCulture);
+
+        var oldValue = currentValue;
+        if (newValue == oldValue)
+        {
+            return;
+        }
+
+        try
+        {
+            _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
+            _detailGrid.Rows[currentCell.RowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
+            PushUndoAction(new DetailUndoAction(
+                selectedItem.Row,
+                [new DetailUndoCell(currentCell.RowIndex, tableColumnIndex, oldValue)]));
+            _isDirty = true;
+            UpdateActionButtons();
+            RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+            SetStatus("存在未保存修改。");
+        }
+        catch (ArgumentException ex)
+        {
+            _detailGrid.Rows[currentCell.RowIndex].ErrorText = ex.Message;
+            MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void BuildBottomBar(TableLayoutPanel root)
@@ -1071,6 +1220,11 @@ public sealed class MainForm : Form
         }
 
         _detailGridColumnWidths[e.Column.Name] = e.Column.Width;
+
+        if (_timeFieldButton.Visible)
+        {
+            UpdateTimeFieldButtonPosition();
+        }
     }
 
     private void DetailGridCellBeginEdit(object? sender, DataGridViewCellCancelEventArgs e)
@@ -1132,7 +1286,16 @@ public sealed class MainForm : Form
             BeginInvoke(() => CommitExpandedValueEditorAfterCurrentCellChanged(editorRowIndex, editorColumnIndex));
         }
 
+        UpdateTimeFieldButtonVisibility();
         UpdateDetailCurrentRowHighlight();
+    }
+
+    private void DetailGridScroll(object? sender, ScrollEventArgs e)
+    {
+        if (_timeFieldButton.Visible)
+        {
+            UpdateTimeFieldButtonPosition();
+        }
     }
 
     private void CommitExpandedValueEditorAfterCurrentCellChanged(int editorRowIndex, int editorColumnIndex)
@@ -1224,6 +1387,7 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.Focus();
         _expandedValueEditorTextBox.SelectionStart = _expandedValueEditorTextBox.TextLength;
         _expandedValueEditorTextBox.SelectionLength = 0;
+        UpdateTimeFieldButtonVisibility();
     }
 
     private Rectangle CalculateExpandedValueEditorBounds(int rowIndex, int columnIndex, string text)
@@ -1331,6 +1495,7 @@ public sealed class MainForm : Form
         _expandedValueEditorColumnIndex = -1;
         _expandedValueEditorTextBox.Visible = false;
         _expandedValueEditorTextBox.Text = string.Empty;
+        HideTimeFieldButton();
     }
 
     private bool IsExpandedValueEditorActive()
