@@ -887,7 +887,7 @@ public sealed class MainForm : Form
         Bitmap? atlasImage = null;
         try
         {
-            atlasImage = new Bitmap(uitexData.TgaFilePath);
+            atlasImage = TgaLoader.Load(uitexData.TgaFilePath);
         }
         catch (Exception ex)
         {
