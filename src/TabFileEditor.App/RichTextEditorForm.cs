@@ -201,7 +201,8 @@ public sealed class RichTextEditorForm : Form
                 seg.FontSchemeId,
                 scheme?.Name ?? "",
                 scheme?.Color ?? "",
-                seg.Text);
+                seg.Text,
+                "");
             _segmentGrid.Rows.Add(row);
         }
     }

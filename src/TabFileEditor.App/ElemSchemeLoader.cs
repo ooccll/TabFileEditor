@@ -55,10 +55,15 @@ public sealed class ElemSchemeLoader
     public void EnsureLoaded()
     {
         if (_loaded) return;
+
+        var colorTable = LoadColorTable();
+        var fontSchemes = LoadFontSchemes();
+        var fontDefs = LoadFontDefs();
+
+        _colorTable = colorTable;
+        _fontSchemes = fontSchemes;
+        _fontDefs = fontDefs;
         _loaded = true;
-        _colorTable = LoadColorTable();
-        _fontSchemes = LoadFontSchemes();
-        _fontDefs = LoadFontDefs();
     }
 
     public Dictionary<int, FontSchemeEntry> FontSchemes

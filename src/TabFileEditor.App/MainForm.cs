@@ -885,21 +885,21 @@ public sealed class MainForm : Form
 
         var currentValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
 
-        using var form = new RichTextEditorForm(currentValue, loader);
-        if (form.ShowDialog(this) != DialogResult.OK)
-        {
-            return;
-        }
-
-        var newValue = form.ResultMarkup;
-        var oldValue = currentValue.Trim();
-        if (newValue == oldValue)
-        {
-            return;
-        }
-
         try
         {
+            using var form = new RichTextEditorForm(currentValue, loader);
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var newValue = form.ResultMarkup;
+            var oldValue = currentValue.Trim();
+            if (newValue == oldValue)
+            {
+                return;
+            }
+
             _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
             _detailGrid.Rows[currentCell.RowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
             PushUndoAction(new DetailUndoAction(
@@ -910,10 +910,10 @@ public sealed class MainForm : Form
             RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
             SetStatus("存在未保存修改。");
         }
-        catch (ArgumentException ex)
+        catch (Exception ex)
         {
-            _detailGrid.Rows[currentCell.RowIndex].ErrorText = ex.Message;
-            MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, $"富文本编辑器错误：\n\n{ex.Message}\n\n{ex.StackTrace}",
+                "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
