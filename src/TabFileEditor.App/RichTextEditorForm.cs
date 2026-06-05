@@ -320,8 +320,10 @@ public sealed class RichTextEditorForm : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
-        _okButton.Location = new Point(ClientSize.Width - 190, 8);
-        _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        if (_okButton is not null)
+            _okButton.Location = new Point(ClientSize.Width - 190, 8);
+        if (_cancelButton is not null)
+            _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
