@@ -47,6 +47,7 @@ public sealed class MainForm : Form
     private readonly TextBox _expandedValueEditorTextBox = new();
     private readonly Button _timeFieldButton = new();
     private readonly Button _frameSelectButton = new();
+    private readonly Button _richTextButton = new();
     private readonly Button _openTableDirectoryButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _insertRowButton = new();
@@ -570,6 +571,7 @@ public sealed class MainForm : Form
         _detailGrid.Controls.Add(_expandedValueEditorTextBox);
         ConfigureTimeFieldButton();
         ConfigureFrameSelectButton();
+        ConfigureRichTextButton();
     }
 
     private static readonly HashSet<string> TimeFieldNames = new(StringComparer.OrdinalIgnoreCase)
@@ -584,6 +586,11 @@ public sealed class MainForm : Form
     {
         "dwNormalFrame",
         "dwHighLightFrame",
+    };
+
+    private static readonly HashSet<string> RichTextFieldNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "szActivityExplain",
     };
 
     private void ConfigureTimeFieldButton()
@@ -618,6 +625,23 @@ public sealed class MainForm : Form
         _frameSelectButton.Cursor = Cursors.Hand;
         _frameSelectButton.Click += (_, _) => OpenFrameSelectorDialog();
         _detailGrid.Controls.Add(_frameSelectButton);
+    }
+
+    private void ConfigureRichTextButton()
+    {
+        _richTextButton.Text = "设置";
+        _richTextButton.Visible = false;
+        _richTextButton.FlatStyle = FlatStyle.Flat;
+        _richTextButton.BackColor = AccentColor;
+        _richTextButton.ForeColor = Color.White;
+        _richTextButton.FlatAppearance.BorderColor = AccentColor;
+        _richTextButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
+        _richTextButton.AutoSize = true;
+        _richTextButton.AutoSizeMode = AutoSizeMode.GrowOnly;
+        _richTextButton.MinimumSize = new Size(50, DetailGridRowHeight);
+        _richTextButton.Cursor = Cursors.Hand;
+        _richTextButton.Click += (_, _) => OpenRichTextEditorDialog();
+        _detailGrid.Controls.Add(_richTextButton);
     }
 
     private void UpdateTimeFieldButtonVisibility()
@@ -761,6 +785,136 @@ public sealed class MainForm : Form
     private void HideFrameSelectButton()
     {
         _frameSelectButton.Visible = false;
+    }
+
+    private void UpdateRichTextButtonVisibility()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            tableColumnIndex < 0 ||
+            tableColumnIndex >= _document.Columns.Count ||
+            _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            HideRichTextButton();
+            return;
+        }
+
+        var columnTitle = _document.Columns[tableColumnIndex].Title;
+        var cellValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
+
+        if (!RichTextFieldNames.Contains(columnTitle) &&
+            !RichTextMarkup.LooksLikeRichText(cellValue))
+        {
+            HideRichTextButton();
+            return;
+        }
+
+        ShowRichTextButton(currentCell.RowIndex);
+    }
+
+    private void ShowRichTextButton(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _detailGrid.Rows.Count)
+        {
+            HideRichTextButton();
+            return;
+        }
+
+        _richTextButton.Visible = true;
+        _richTextButton.BringToFront();
+        UpdateRichTextButtonPosition();
+    }
+
+    private void UpdateRichTextButtonPosition()
+    {
+        if (!_richTextButton.Visible ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0 } currentCell)
+        {
+            return;
+        }
+
+        var valueColumnIndex = _detailGrid.Columns.Count - 1;
+        var cellBounds = GetValueCellDisplayBounds(currentCell.RowIndex, valueColumnIndex);
+        var buttonWidth = _richTextButton.Width;
+
+        _richTextButton.Location = new Point(
+            cellBounds.Right - buttonWidth,
+            cellBounds.Top);
+    }
+
+    private void HideRichTextButton()
+    {
+        _richTextButton.Visible = false;
+    }
+
+    private ElemSchemeLoader? _elemSchemeLoader;
+
+    private ElemSchemeLoader? GetElemSchemeLoader()
+    {
+        if (_document is null) return null;
+        var elemDir = ElemSchemeLoader.ResolveElemDirectory(_document.Path);
+        if (elemDir is null) return null;
+
+        if (_elemSchemeLoader is null || _elemSchemeLoader.ElemDirectory != elemDir)
+        {
+            _elemSchemeLoader = new ElemSchemeLoader(elemDir);
+        }
+        return _elemSchemeLoader;
+    }
+
+    private void OpenRichTextEditorDialog()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var loader = GetElemSchemeLoader();
+        if (loader is null)
+        {
+            MessageBox.Show(this, $"无法从表格路径推导出 Elem 配置目录。\n表格路径：{_document.Path}",
+                "路径错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var currentValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
+
+        using var form = new RichTextEditorForm(currentValue, loader);
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var newValue = form.ResultMarkup;
+        var oldValue = currentValue.Trim();
+        if (newValue == oldValue)
+        {
+            return;
+        }
+
+        try
+        {
+            _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
+            _detailGrid.Rows[currentCell.RowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
+            PushUndoAction(new DetailUndoAction(
+                selectedItem.Row,
+                [new DetailUndoCell(currentCell.RowIndex, tableColumnIndex, oldValue)]));
+            _isDirty = true;
+            UpdateActionButtons();
+            RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+            SetStatus("存在未保存修改。");
+        }
+        catch (ArgumentException ex)
+        {
+            _detailGrid.Rows[currentCell.RowIndex].ErrorText = ex.Message;
+            MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OpenTimePickerDialog()
@@ -1462,6 +1616,11 @@ public sealed class MainForm : Form
         {
             UpdateFrameSelectButtonPosition();
         }
+
+        if (_richTextButton.Visible)
+        {
+            UpdateRichTextButtonPosition();
+        }
     }
 
     private void DetailGridCellBeginEdit(object? sender, DataGridViewCellCancelEventArgs e)
@@ -1525,6 +1684,7 @@ public sealed class MainForm : Form
 
         UpdateTimeFieldButtonVisibility();
         UpdateFrameSelectButtonVisibility();
+        UpdateRichTextButtonVisibility();
         UpdateDetailCurrentRowHighlight();
     }
 
@@ -1538,6 +1698,11 @@ public sealed class MainForm : Form
         if (_frameSelectButton.Visible)
         {
             UpdateFrameSelectButtonPosition();
+        }
+
+        if (_richTextButton.Visible)
+        {
+            UpdateRichTextButtonPosition();
         }
     }
 
@@ -1632,6 +1797,7 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.SelectionLength = 0;
         UpdateTimeFieldButtonVisibility();
         UpdateFrameSelectButtonVisibility();
+        UpdateRichTextButtonVisibility();
     }
 
     private Rectangle CalculateExpandedValueEditorBounds(int rowIndex, int columnIndex, string text)
@@ -1741,6 +1907,7 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.Text = string.Empty;
         HideTimeFieldButton();
         HideFrameSelectButton();
+        HideRichTextButton();
     }
 
     private bool IsExpandedValueEditorActive()
