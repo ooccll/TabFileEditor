@@ -18,7 +18,7 @@ public sealed class DateTimePickerForm : Form
     public DateTimePickerForm(DateTime initialDateTime)
     {
         Text = "选择日期时间";
-        Size = new Size(320, 240);
+        Size = new Size(320, 270);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -53,12 +53,12 @@ public sealed class DateTimePickerForm : Form
         _okButton.Text = "确定";
         _okButton.DialogResult = DialogResult.OK;
         _okButton.Location = new Point(80, 110);
-        _okButton.Width = 80;
+        _okButton.Size = new Size(80, 46);
 
         _cancelButton.Text = "取消";
         _cancelButton.DialogResult = DialogResult.Cancel;
         _cancelButton.Location = new Point(180, 110);
-        _cancelButton.Width = 80;
+        _cancelButton.Size = new Size(80, 46);
 
         Controls.AddRange(new Control[]
         {
