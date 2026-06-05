@@ -682,7 +682,8 @@ public sealed class MainForm : Form
             tableColumnIndex >= _document.Columns.Count ||
             !FrameSelectFieldNames.Contains(_document.Columns[tableColumnIndex].Title) ||
             !IsOperatActFile() ||
-            string.IsNullOrWhiteSpace(GetSzLinkFrameValue()))
+            string.IsNullOrWhiteSpace(GetSzLinkFrameValue()) ||
+            !CanResolveFrameBasePath())
         {
             HideFrameSelectButton();
             return;
@@ -696,6 +697,13 @@ public sealed class MainForm : Form
         if (_document is null) return false;
         var fileName = Path.GetFileName(_document.Path);
         return string.Equals(fileName, "OperatAct.txt", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool CanResolveFrameBasePath()
+    {
+        if (_document is null) return false;
+        var normalizedPath = _document.Path.Replace('/', '\\');
+        return normalizedPath.Contains("client\\ui", StringComparison.OrdinalIgnoreCase);
     }
 
     private string GetSzLinkFrameValue()
