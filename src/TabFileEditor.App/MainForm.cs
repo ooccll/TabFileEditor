@@ -587,8 +587,9 @@ public sealed class MainForm : Form
         _timeFieldButton.ForeColor = Color.White;
         _timeFieldButton.FlatAppearance.BorderColor = AccentColor;
         _timeFieldButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
-        _timeFieldButton.AutoSize = false;
-        _timeFieldButton.Size = new Size(54, DetailGridRowHeight);
+        _timeFieldButton.AutoSize = true;
+        _timeFieldButton.AutoSizeMode = AutoSizeMode.GrowOnly;
+        _timeFieldButton.MinimumSize = new Size(50, DetailGridRowHeight);
         _timeFieldButton.Cursor = Cursors.Hand;
         _timeFieldButton.Click += (_, _) => OpenTimePickerDialog();
         _detailGrid.Controls.Add(_timeFieldButton);
