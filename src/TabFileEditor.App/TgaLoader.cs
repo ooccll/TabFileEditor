@@ -56,10 +56,10 @@ public static class TgaLoader
             var srcOffset = i * bytesPerPixel;
             var dstOffset = i * 4;
 
-            // BGR/BGRA → ARGB（交换 R 和 B）
-            argbPixels[dstOffset + 0] = rawPixels[srcOffset + 2]; // R ← B 位置
+            // Format32bppArgb 内存布局为 BGRA，与 TGA 原始像素顺序一致
+            argbPixels[dstOffset + 0] = rawPixels[srcOffset + 0]; // B
             argbPixels[dstOffset + 1] = rawPixels[srcOffset + 1]; // G
-            argbPixels[dstOffset + 2] = rawPixels[srcOffset + 0]; // B ← R 位置
+            argbPixels[dstOffset + 2] = rawPixels[srcOffset + 2]; // R
 
             if (bytesPerPixel == 4)
                 argbPixels[dstOffset + 3] = rawPixels[srcOffset + 3]; // A

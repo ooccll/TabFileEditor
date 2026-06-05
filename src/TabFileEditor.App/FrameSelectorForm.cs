@@ -22,18 +22,9 @@ public sealed class FrameSelectorForm : Form
         MinimizeBox = false;
         ShowInTaskbar = false;
 
-        var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
-        var maxWidth = (int)(screen.Width * 0.8);
-        var maxHeight = (int)(screen.Height * 0.8);
-
         var statusHeight = 36;
-        var padding = 24;
 
-        var formW = Math.Min(atlasImage.Width + padding, maxWidth);
-        var formH = Math.Min(atlasImage.Height + padding + statusHeight, maxHeight);
-        Size = new Size(formW, formH);
-        MaximumSize = new Size(maxWidth, maxHeight);
-        MinimumSize = new Size(300, 200);
+        ClientSize = new Size(atlasImage.Width, atlasImage.Height + statusHeight);
         AutoScroll = true;
 
         _atlasPanel = new AtlasPanel(data, atlasImage)
@@ -102,9 +93,6 @@ internal sealed class AtlasPanel : Panel
     private readonly UitexData _data;
     private readonly Bitmap _atlasImage;
     private int? _hoveredFrameIndex;
-    private float _scale = 1.0f;
-    private int _offsetX;
-    private int _offsetY;
 
     public event Action<int>? FrameClicked;
     public event Action<int?>? FrameHoverChanged;
@@ -115,31 +103,11 @@ internal sealed class AtlasPanel : Panel
         _atlasImage = atlasImage;
         DoubleBuffered = true;
         BackColor = Color.FromArgb(0x1A, 0x1A, 0x1A);
-        CalculateLayout();
-    }
-
-    private void CalculateLayout()
-    {
-        var imgW = _atlasImage.Width;
-        var imgH = _atlasImage.Height;
-
-        var scaleX = (float)ClientSize.Width / imgW;
-        var scaleY = (float)ClientSize.Height / imgH;
-        _scale = Math.Min(1.0f, Math.Min(scaleX, scaleY));
-
-        if (_scale < 0.01f) _scale = 0.01f;
-
-        var displayW = (int)(imgW * _scale);
-        var displayH = (int)(imgH * _scale);
-
-        _offsetX = Math.Max(0, (ClientSize.Width - displayW) / 2);
-        _offsetY = Math.Max(0, (ClientSize.Height - displayH) / 2);
     }
 
     protected override void OnResize(EventArgs eventargs)
     {
         base.OnResize(eventargs);
-        CalculateLayout();
         Invalidate();
     }
 
@@ -148,14 +116,7 @@ internal sealed class AtlasPanel : Panel
         base.OnPaint(e);
 
         e.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
-
-        var imgW = _atlasImage.Width;
-        var imgH = _atlasImage.Height;
-        var displayW = (int)(imgW * _scale);
-        var displayH = (int)(imgH * _scale);
-
-        var destRect = new Rectangle(_offsetX, _offsetY, displayW, displayH);
-        e.Graphics.DrawImage(_atlasImage, destRect);
+        e.Graphics.DrawImage(_atlasImage, 0, 0);
 
         // 所有帧边界线（淡灰色）
         using var dimPen = new Pen(Color.FromArgb(40, 255, 255, 255), 1);
@@ -186,7 +147,7 @@ internal sealed class AtlasPanel : Panel
                 var labelSize = TextRenderer.MeasureText(labelText, labelFont);
                 var labelX = rect.Left;
                 var labelY = rect.Top - labelSize.Height - 2;
-                if (labelY < _offsetY) labelY = rect.Top + 2;
+                if (labelY < 0) labelY = rect.Top + 2;
 
                 using var labelBg = new SolidBrush(Color.FromArgb(180, 0, 170, 255));
                 e.Graphics.FillRectangle(labelBg, labelX, labelY, labelSize.Width + 4, labelSize.Height + 2);
@@ -198,24 +159,17 @@ internal sealed class AtlasPanel : Panel
 
     private Rectangle FrameToDisplayRect(FrameInfo frame)
     {
-        var x = _offsetX + (int)(frame.Left * _scale);
-        var y = _offsetY + (int)(frame.Top * _scale);
-        var w = (int)(frame.Width * _scale);
-        var h = (int)(frame.Height * _scale);
-        return new Rectangle(x, y, w, h);
+        return new Rectangle(frame.Left, frame.Top, frame.Width, frame.Height);
     }
 
     private int? HitTestFrame(Point mousePos)
     {
-        var imgX = (mousePos.X - _offsetX) / _scale;
-        var imgY = (mousePos.Y - _offsetY) / _scale;
-
         for (var i = 0; i < _data.Frames.Count; i++)
         {
             var f = _data.Frames[i];
             if (f.Width <= 0 || f.Height <= 0) continue;
-            if (imgX >= f.Left && imgX < f.Left + f.Width &&
-                imgY >= f.Top && imgY < f.Top + f.Height)
+            if (mousePos.X >= f.Left && mousePos.X < f.Left + f.Width &&
+                mousePos.Y >= f.Top && mousePos.Y < f.Top + f.Height)
             {
                 return i;
             }
