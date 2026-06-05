@@ -781,7 +781,7 @@ public sealed class MainForm : Form
         {
             try
             {
-                initialDateTime = DateTimeOffset.FromUnixTimeSeconds(timestamp).LocalDateTime;
+                initialDateTime = DateTimeOffset.FromUnixTimeSeconds(timestamp).UtcDateTime;
             }
             catch
             {
