@@ -12,6 +12,7 @@ public sealed class FontSchemePickerForm : Form
     private readonly Button _cancelButton = new();
     private readonly List<FontSchemeEntry> _allEntries;
     private List<FontSchemeEntry> _filteredEntries;
+    private readonly int _initialFontSchemeId;
 
     public int SelectedFontSchemeId { get; private set; }
 
@@ -20,6 +21,7 @@ public sealed class FontSchemePickerForm : Form
         _loader = loader;
         _allEntries = loader.FontSchemes.Values.OrderBy(e => e.Id).ToList();
         _filteredEntries = _allEntries;
+        _initialFontSchemeId = currentFontSchemeId;
         SelectedFontSchemeId = currentFontSchemeId;
 
         Text = "选择字体方案";
@@ -31,7 +33,6 @@ public sealed class FontSchemePickerForm : Form
         ShowInTaskbar = false;
 
         BuildUi();
-        SelectCurrentEntry(currentFontSchemeId);
     }
 
     private void BuildUi()
@@ -161,6 +162,8 @@ public sealed class FontSchemePickerForm : Form
             if (_grid.CurrentRow?.DataBoundItem is FontSchemeEntry entry)
                 SelectedFontSchemeId = entry.Id;
         };
+
+        _grid.DataBindingComplete += (_, _) => SelectCurrentEntry(_initialFontSchemeId);
 
         RefreshGrid();
     }
