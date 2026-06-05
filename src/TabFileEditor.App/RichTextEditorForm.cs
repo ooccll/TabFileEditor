@@ -128,6 +128,40 @@ public sealed class RichTextEditorForm : Form
         CancelButton = _cancelButton;
 
         RefreshPreview();
+        AutoSizeToContent();
+    }
+
+    private void AutoSizeToContent()
+    {
+        Control screenControl = Owner ?? this;
+        var screen = Screen.FromControl(screenControl).WorkingArea;
+        const int minWidth = 500;
+        const int minHeight = 300;
+        const int screenMargin = 24;
+
+        var maxWindowWidth = Math.Max(1, screen.Width - screenMargin);
+        var maxWindowHeight = Math.Max(1, screen.Height - screenMargin);
+        var maxClientWidth = Math.Max(1, maxWindowWidth - (Width - ClientSize.Width));
+        var maxPreviewWidth = Math.Max(1, maxClientWidth - 2);
+        var contentSize = _previewPanel.MeasurePreferredContentSize(maxPreviewWidth);
+        var desiredClientSize = new Size(
+            contentSize.Width + 2,
+            contentSize.Height + _fontBar.Height + 50 + 2);
+        var desiredWindowSize = SizeFromClientSize(desiredClientSize);
+
+        var width = Math.Min(maxWindowWidth, Math.Max(minWidth, desiredWindowSize.Width));
+        var height = Math.Min(maxWindowHeight, Math.Max(minHeight, desiredWindowSize.Height));
+
+        Size = new Size(width, height);
+        Location = new Point(
+            screen.X + (screen.Width - width) / 2,
+            screen.Y + (screen.Height - height) / 2);
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        AutoSizeToContent();
     }
 
     private void RefreshPreview()

@@ -67,8 +67,13 @@ public sealed class RichTextPreviewPanel : Panel
 
     private List<SegmentLayout> ComputeLayout(Graphics g)
     {
+        return ComputeLayout(g, ClientSize.Width);
+    }
+
+    private List<SegmentLayout> ComputeLayout(Graphics g, int viewportWidth)
+    {
         var result = new List<SegmentLayout>();
-        var clientWidth = ClientSize.Width - PaddingPx * 2;
+        var clientWidth = viewportWidth - PaddingPx * 2;
         if (clientWidth <= 0) return result;
 
         var x = (float)PaddingPx;
@@ -151,6 +156,46 @@ public sealed class RichTextPreviewPanel : Panel
         }
 
         return result;
+    }
+
+    public Size MeasurePreferredContentSize(int maxViewportWidth)
+    {
+        using var g = CreateGraphics();
+        var viewportWidth = Math.Max(PaddingPx * 2 + 100, Math.Min(maxViewportWidth, MeasurePreferredViewportWidth(g)));
+        var layout = ComputeLayout(g, viewportWidth);
+        var contentHeight = PaddingPx * 2;
+        var contentWidth = viewportWidth;
+
+        if (layout.Count > 0)
+        {
+            contentHeight = (int)Math.Ceiling(layout[^1].Bounds.Bottom + PaddingPx);
+            contentWidth = (int)Math.Ceiling(Math.Max(
+                viewportWidth,
+                layout.Max(segment => segment.Bounds.Right + PaddingPx)));
+        }
+
+        return new Size(
+            Math.Min(maxViewportWidth, Math.Max(PaddingPx * 2 + 100, contentWidth)),
+            Math.Max(PaddingPx * 2 + 40, contentHeight));
+    }
+
+    private int MeasurePreferredViewportWidth(Graphics g)
+    {
+        var maxLineWidth = 0f;
+        foreach (var segment in _segments)
+        {
+            var spec = _loader.ResolveFont(segment.FontSchemeId);
+            var font = GetFont(spec);
+            foreach (var line in segment.Text.Split('\n'))
+            {
+                var width = string.IsNullOrEmpty(line)
+                    ? 0
+                    : g.MeasureString(line, font).Width;
+                maxLineWidth = Math.Max(maxLineWidth, width);
+            }
+        }
+
+        return (int)Math.Ceiling(maxLineWidth + PaddingPx * 2 + SegmentEndHitWidth);
     }
 
     private void EnsureLayout(Graphics g)
@@ -277,9 +322,26 @@ public sealed class RichTextPreviewPanel : Panel
     {
         base.OnMouseClick(e);
         if (e.Button != MouseButtons.Left) return;
-        if (_overlayEditor != null) return;
 
         var hit = HitTest(e.Location);
+
+        if (_overlayEditor != null)
+        {
+            if (hit.SegmentIndex == _editingSegmentIndex)
+                return;
+
+            CommitEdit();
+
+            if (hit.IsAtSegmentEnd && hit.SegmentIndex >= 0)
+            {
+                NewSegmentRequested?.Invoke(hit.SegmentIndex);
+            }
+            else if (hit.SegmentIndex >= 0)
+            {
+                SegmentClicked?.Invoke(hit.SegmentIndex);
+            }
+            return;
+        }
 
         if (hit.IsAtSegmentEnd && hit.SegmentIndex >= 0)
         {
@@ -383,6 +445,7 @@ public sealed class RichTextPreviewPanel : Panel
 
         _overlayEditor.LostFocus += OnOverlayLostFocus;
         _overlayEditor.KeyDown += OnOverlayKeyDown;
+        _overlayEditor.TextChanged += OnOverlayTextChanged;
 
         Controls.Add(_overlayEditor);
         _overlayEditor.Focus();
@@ -420,6 +483,7 @@ public sealed class RichTextPreviewPanel : Panel
         if (_overlayEditor == null) return;
         _overlayEditor.LostFocus -= OnOverlayLostFocus;
         _overlayEditor.KeyDown -= OnOverlayKeyDown;
+        _overlayEditor.TextChanged -= OnOverlayTextChanged;
         Controls.Remove(_overlayEditor);
         _overlayEditor.Dispose();
         _overlayEditor = null;
@@ -443,6 +507,51 @@ public sealed class RichTextPreviewPanel : Panel
             e.Handled = true;
             CancelEdit();
         }
+    }
+
+    private void OnOverlayTextChanged(object? sender, EventArgs e)
+    {
+        ResizeOverlayEditorToText();
+    }
+
+    private void ResizeOverlayEditorToText()
+    {
+        if (_overlayEditor == null) return;
+
+        using var g = CreateGraphics();
+        var layoutX = _overlayEditor.Left - AutoScrollPosition.X;
+        var maxWidth = Math.Max(100, ClientSize.Width - PaddingPx - layoutX);
+        var measureWidth = Math.Max(1, maxWidth - 8);
+        var desiredWidth = 100f;
+        var visualLineCount = 0;
+
+        foreach (var rawLine in _overlayEditor.Text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+        {
+            var wrappedLines = WrapText(g, rawLine, _overlayEditor.Font, measureWidth);
+            visualLineCount += Math.Max(1, wrappedLines.Count);
+
+            foreach (var wrappedLine in wrappedLines)
+            {
+                var lineWidth = string.IsNullOrEmpty(wrappedLine)
+                    ? 0
+                    : g.MeasureString(wrappedLine, _overlayEditor.Font).Width + 10;
+                desiredWidth = Math.Max(desiredWidth, lineWidth);
+            }
+        }
+
+        var desiredHeight = Math.Max(_overlayEditor.Font.Height + 4, visualLineCount * _overlayEditor.Font.Height + 8);
+        var maxHeight = Math.Max(_overlayEditor.Font.Height + 4, ClientSize.Height - Math.Max(0, _overlayEditor.Top) - PaddingPx);
+        var newSize = new Size(
+            (int)Math.Ceiling((double)Math.Min(maxWidth, desiredWidth)),
+            (int)Math.Ceiling((double)Math.Min(maxHeight, desiredHeight)));
+        var newScrollBars = desiredHeight > maxHeight ? ScrollBars.Vertical : ScrollBars.None;
+
+        if (_overlayEditor.Size != newSize)
+            _overlayEditor.Size = newSize;
+        if (_overlayEditor.ScrollBars != newScrollBars)
+            _overlayEditor.ScrollBars = newScrollBars;
+
+        Invalidate();
     }
 
     #endregion
@@ -525,7 +634,19 @@ public sealed class RichTextPreviewPanel : Panel
         }
 
         // Edit highlight
-        if (_editingSegmentIndex >= 0 && _editingSegmentIndex < _layout.Count)
+        if (_editingSegmentIndex >= 0 && _overlayEditor != null)
+        {
+            var bounds = new RectangleF(
+                _overlayEditor.Location.X - AutoScrollPosition.X - 2,
+                _overlayEditor.Location.Y - AutoScrollPosition.Y - 2,
+                _overlayEditor.Width + 4,
+                _overlayEditor.Height + 4);
+            using var pen = new Pen(Color.FromArgb(0x00, 0x7A, 0xCC), 2f);
+            using var brush = new SolidBrush(Color.FromArgb(0x18, 0x00, 0x7A, 0xCC));
+            g.FillRectangle(brush, bounds);
+            g.DrawRectangle(pen, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        }
+        else if (_editingSegmentIndex >= 0 && _editingSegmentIndex < _layout.Count)
         {
             var bounds = _layout[_editingSegmentIndex].Bounds;
             using var pen = new Pen(Color.FromArgb(0x00, 0x7A, 0xCC), 2f);
