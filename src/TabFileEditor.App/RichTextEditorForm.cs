@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Drawing.Text;
 
 namespace TabFileEditor.App;
@@ -7,7 +8,7 @@ public sealed class RichTextEditorForm : Form
     private readonly ElemSchemeLoader _loader;
     private readonly RichTextDocument _document;
     private readonly RichTextPreviewPanel _previewPanel;
-    private readonly DataGridView _segmentGrid;
+    private readonly SegmentDataGridView _segmentGrid;
     private readonly Button _okButton;
     private readonly Button _cancelButton;
     private readonly ContextMenuStrip _contextMenu;
@@ -43,7 +44,7 @@ public sealed class RichTextEditorForm : Form
             BorderStyle = BorderStyle.FixedSingle,
         };
 
-        _segmentGrid = new DataGridView
+        _segmentGrid = new SegmentDataGridView
         {
             Dock = DockStyle.Fill,
             AllowUserToAddRows = false,
@@ -66,6 +67,7 @@ public sealed class RichTextEditorForm : Form
         _expandedTextEditor.ScrollBars = ScrollBars.Vertical;
         _expandedTextEditor.Leave += (_, _) => CommitExpandedTextEditor();
         _segmentGrid.Controls.Add(_expandedTextEditor);
+        _segmentGrid.GetExpandedEditor = () => _expandedTextEditor;
 
         _contextMenu = new ContextMenuStrip();
         _contextMenu.Items.Add("在此之后插入段落", null, OnInsertSegmentAfter);
@@ -460,12 +462,6 @@ public sealed class RichTextEditorForm : Form
                 _segmentGrid.Focus();
                 return true;
             }
-            if ((keyData & Keys.Control) == Keys.Control)
-            {
-                var key = keyData & Keys.KeyCode;
-                if (key is Keys.C or Keys.X or Keys.V or Keys.A)
-                    return false;
-            }
         }
         return base.ProcessCmdKey(ref msg, keyData);
     }
@@ -492,5 +488,25 @@ public sealed class RichTextEditorForm : Form
     {
         _previewPanel.Dispose();
         base.OnFormClosed(e);
+    }
+
+    private class SegmentDataGridView : DataGridView
+    {
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Func<TextBox?>? GetExpandedEditor { get; set; }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            var editor = GetExpandedEditor?.Invoke();
+            if (editor is { Visible: true } && (keyData & Keys.Control) == Keys.Control)
+            {
+                var key = keyData & Keys.KeyCode;
+                if (key == Keys.C) { editor.Copy(); return true; }
+                if (key == Keys.X) { editor.Cut(); return true; }
+                if (key == Keys.V) { editor.Paste(); return true; }
+                if (key == Keys.A) { editor.SelectAll(); return true; }
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
     }
 }
