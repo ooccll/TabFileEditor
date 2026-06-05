@@ -47,7 +47,7 @@ public sealed class RichTextEditorFormTests : IDisposable
 
             InvokeMouseClick(panel, new Point(panel.ClientSize.Width - 20, panel.ClientSize.Height - 20));
 
-            Assert.Null(FindOverlayEditorOrNull(panel));
+            Assert.Same(editor, FindOverlayEditor(panel));
             Assert.Equal("修改后的文字", panel.Segments[0].Text);
         });
     }
@@ -69,6 +69,94 @@ public sealed class RichTextEditorFormTests : IDisposable
 
             Assert.Contains("修改后的文字", form.ResultMarkup);
             Assert.Contains("<text>", form.ResultMarkup);
+        });
+    }
+
+    [Fact]
+    public void RichTextEditorFormShowsEditableTextBoxesWithoutEnteringEditMode()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new RichTextEditorForm(
+                "<text>text=\"第一段\" font=18</text><text>text=\"第二段\" font=19</text>",
+                CreateLoader());
+            form.CreateControl();
+            var panel = FindDescendant<RichTextPreviewPanel>(form);
+
+            var editors = FindDescendants<TextBox>(panel);
+
+            Assert.Equal(2, editors.Count);
+            Assert.All(editors, editor =>
+            {
+                Assert.False(editor.ReadOnly);
+                Assert.True(editor.Multiline);
+                Assert.Equal(BorderStyle.FixedSingle, editor.BorderStyle);
+            });
+            Assert.Collection(
+                editors.OrderBy(editor => editor.Top).ThenBy(editor => editor.Left),
+                editor => Assert.Equal("第一段", editor.Text),
+                editor => Assert.Equal("第二段", editor.Text));
+        });
+    }
+
+    [Fact]
+    public void EditingDirectTextBoxUpdatesResultMarkup()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new RichTextEditorForm("<text>text=\"原文字\" font=18</text>", CreateLoader());
+            form.CreateControl();
+            var panel = FindDescendant<RichTextPreviewPanel>(form);
+            var editor = Assert.Single(FindDescendants<TextBox>(panel));
+
+            editor.Text = "直接修改";
+            InvokePrivate(form, "OnOkClick", null!, EventArgs.Empty);
+
+            Assert.Contains("直接修改", form.ResultMarkup);
+            Assert.Contains("font=18", form.ResultMarkup);
+        });
+    }
+
+    [Fact]
+    public void HoveringRichTextSegmentShowsActionButtons()
+    {
+        RunOnStaThread(() =>
+        {
+            using var panel = CreatePanel([new RichTextSegment("原文字", 18)]);
+            var editor = Assert.Single(FindDescendants<TextBox>(panel));
+
+            InvokeControlMouseEnter(editor);
+
+            var buttons = FindDescendants<Button>(panel);
+            Assert.Contains(buttons, button => button.Text == "改变字体" && button.Visible);
+            Assert.Contains(buttons, button => button.Text == "文本末尾新增字符串" && button.Visible);
+        });
+    }
+
+    [Fact]
+    public void ApplyingFontSchemeUpdatesCurrentRichTextSegment()
+    {
+        RunOnStaThread(() =>
+        {
+            using var panel = CreatePanel([new RichTextSegment("原文字", 18)]);
+
+            InvokePrivate(panel, "ApplyFontSchemeToSegment", 0, 19);
+
+            Assert.Equal(19, panel.Segments[0].FontSchemeId);
+        });
+    }
+
+    [Fact]
+    public void AppendingTextAddsToCurrentRichTextSegment()
+    {
+        RunOnStaThread(() =>
+        {
+            using var panel = CreatePanel([new RichTextSegment("原文字", 18)]);
+
+            InvokePrivate(panel, "AppendTextToSegment", 0, "追加");
+
+            Assert.Equal("原文字追加", panel.Segments[0].Text);
+            Assert.Equal("原文字追加", Assert.Single(FindDescendants<TextBox>(panel)).Text);
         });
     }
 
@@ -141,9 +229,12 @@ public sealed class RichTextEditorFormTests : IDisposable
 
             InvokeMouseClick(panel, new Point(20, 45));
 
-            var nextEditor = FindOverlayEditor(panel);
+            var editors = FindDescendants<TextBox>(panel)
+                .OrderBy(textBox => textBox.Top)
+                .ThenBy(textBox => textBox.Left)
+                .ToList();
             Assert.Equal("第一段修改", panel.Segments[0].Text);
-            Assert.Equal("第二段", nextEditor.Text);
+            Assert.Equal("第二段", editors[1].Text);
         });
     }
 
@@ -186,6 +277,20 @@ public sealed class RichTextEditorFormTests : IDisposable
         return null;
     }
 
+    private static List<TControl> FindDescendants<TControl>(Control parent)
+        where TControl : Control
+    {
+        var result = new List<TControl>();
+        foreach (Control child in parent.Controls)
+        {
+            if (child is TControl match)
+                result.Add(match);
+
+            result.AddRange(FindDescendants<TControl>(child));
+        }
+        return result;
+    }
+
     private static TControl FindDescendant<TControl>(Control parent)
         where TControl : Control
     {
@@ -225,6 +330,15 @@ public sealed class RichTextEditorFormTests : IDisposable
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
         method.Invoke(panel, [new MouseEventArgs(MouseButtons.Left, 1, location.X, location.Y, 0)]);
+    }
+
+    private static void InvokeControlMouseEnter(Control control)
+    {
+        var method = typeof(Control).GetMethod(
+            "OnMouseEnter",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method.Invoke(control, [EventArgs.Empty]);
     }
 
     private static void InvokePrivate(object target, string methodName, params object[] args)

@@ -18,18 +18,26 @@ public sealed class RichTextPreviewPanel : Panel
     private readonly ElemSchemeLoader _loader;
     private List<RichTextSegment> _segments = [];
     private List<SegmentLayout> _layout = [];
+    private readonly List<TextBox> _segmentEditors = [];
     private readonly Dictionary<(string file, int size), Font> _fontCache = [];
     private readonly Dictionary<string, PrivateFontCollection> _pfcCache = [];
     private const int PaddingPx = 12;
     private const int LineSpacing = 4;
     private const int SegmentEndHitWidth = 14;
+    private const int ActionButtonHeight = 26;
+    private const int ChangeFontButtonWidth = 76;
+    private const int AppendTextButtonWidth = 128;
 
     private int _hoveredSegmentIndex = -1;
     private bool _hoverAtSegmentEnd;
     private int _editingSegmentIndex = -1;
     private TextBox? _overlayEditor;
     private ContextMenuStrip? _contextMenu;
+    private readonly Button _changeFontButton;
+    private readonly Button _appendTextButton;
+    private int _actionSegmentIndex = -1;
     private bool _layoutDirty = true;
+    private bool _updatingEditors;
 
     public event Action<int>? SegmentClicked;
     public event Action<int>? NewSegmentRequested;
@@ -48,12 +56,22 @@ public sealed class RichTextPreviewPanel : Panel
         DoubleBuffered = true;
         BackColor = Color.FromArgb(0x1A, 0x1A, 0x2E);
         AutoScroll = true;
+
+        _changeFontButton = CreateActionButton("改变字体", ChangeFontButtonWidth);
+        _appendTextButton = CreateActionButton("文本末尾新增字符串", AppendTextButtonWidth);
+        _changeFontButton.Click += (_, _) => ChangeFontForActionSegment();
+        _appendTextButton.Click += (_, _) => AppendTextForActionSegment();
+        _changeFontButton.MouseEnter += (_, _) => { if (_actionSegmentIndex >= 0) ShowActionButtons(_actionSegmentIndex); };
+        _appendTextButton.MouseEnter += (_, _) => { if (_actionSegmentIndex >= 0) ShowActionButtons(_actionSegmentIndex); };
+        Controls.Add(_changeFontButton);
+        Controls.Add(_appendTextButton);
     }
 
     public void SetSegments(List<RichTextSegment> segments)
     {
         _segments = segments.ToList();
         _layoutDirty = true;
+        RebuildSegmentEditors();
         Invalidate();
     }
 
@@ -61,6 +79,336 @@ public sealed class RichTextPreviewPanel : Panel
     {
         base.OnResize(e);
         _layoutDirty = true;
+        LayoutSegmentEditors();
+    }
+
+    private static Button CreateActionButton(string text, int width)
+    {
+        return new Button
+        {
+            Text = text,
+            Size = new Size(width, ActionButtonHeight),
+            Visible = false,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(0x00, 0x7A, 0xCC),
+            ForeColor = Color.White,
+            Cursor = Cursors.Hand,
+        };
+    }
+
+    private void RebuildSegmentEditors()
+    {
+        foreach (var editor in _segmentEditors)
+        {
+            Controls.Remove(editor);
+            editor.Dispose();
+        }
+
+        _segmentEditors.Clear();
+        _overlayEditor = null;
+        _editingSegmentIndex = -1;
+        HideActionButtons();
+
+        for (var i = 0; i < _segments.Count; i++)
+        {
+            var editor = CreateSegmentEditor(i);
+            _segmentEditors.Add(editor);
+            Controls.Add(editor);
+        }
+
+        _changeFontButton.BringToFront();
+        _appendTextButton.BringToFront();
+        LayoutSegmentEditors();
+    }
+
+    private void SegmentEditorTextChanged(object? sender, EventArgs e)
+    {
+        if (_updatingEditors || sender is not TextBox editor || editor.Tag is not int segmentIndex)
+            return;
+
+        if (segmentIndex < 0 || segmentIndex >= _segments.Count)
+            return;
+
+        _segments[segmentIndex] = _segments[segmentIndex] with { Text = NormalizeEditorText(editor.Text) };
+
+        using var g = CreateGraphics();
+        var height = CalculateEditorHeight(g, editor.Text, editor.Font, editor.Width, editor.Top);
+        editor.Height = height;
+        editor.ScrollBars = NeedsEditorScroll(g, editor.Text, editor.Font, editor.Width, editor.Height)
+            ? ScrollBars.Vertical
+            : ScrollBars.None;
+
+        _layoutDirty = true;
+        LayoutSegmentEditors(preserveExistingWidths: true);
+        Invalidate();
+    }
+
+    private void SegmentEditorMouseEnter(object? sender, EventArgs e)
+    {
+        if (sender is TextBox { Tag: int segmentIndex })
+            ShowActionButtons(segmentIndex);
+    }
+
+    private void SegmentEditorMouseUp(object? sender, MouseEventArgs e)
+    {
+        if (sender is not TextBox { Tag: int segmentIndex } editor || e.Button != MouseButtons.Right)
+            return;
+
+        BuildContextMenu(segmentIndex);
+        _contextMenu!.Show(editor, e.Location);
+    }
+
+    private void ShowActionButtons(int segmentIndex)
+    {
+        if (segmentIndex < 0 || segmentIndex >= _segmentEditors.Count)
+            return;
+
+        _actionSegmentIndex = segmentIndex;
+        _changeFontButton.Visible = true;
+        _appendTextButton.Visible = true;
+        PositionActionButtons(segmentIndex);
+        _changeFontButton.BringToFront();
+        _appendTextButton.BringToFront();
+    }
+
+    private void PositionActionButtons(int segmentIndex)
+    {
+        if (segmentIndex < 0 || segmentIndex >= _segmentEditors.Count)
+            return;
+
+        var editor = _segmentEditors[segmentIndex];
+        var totalWidth = ChangeFontButtonWidth + AppendTextButtonWidth + 4;
+        var x = Math.Min(
+            Math.Max(PaddingPx, editor.Right + 4),
+            Math.Max(PaddingPx, ClientSize.Width - totalWidth - PaddingPx));
+        var y = Math.Max(PaddingPx, editor.Top);
+
+        _changeFontButton.Location = new Point(x, y);
+        _appendTextButton.Location = new Point(x + ChangeFontButtonWidth + 4, y);
+    }
+
+    private void HideActionButtons()
+    {
+        _actionSegmentIndex = -1;
+        _changeFontButton.Visible = false;
+        _appendTextButton.Visible = false;
+    }
+
+    private void ChangeFontForActionSegment()
+    {
+        if (_actionSegmentIndex < 0 || _actionSegmentIndex >= _segments.Count)
+            return;
+
+        using var picker = new FontSchemePickerForm(_loader, _segments[_actionSegmentIndex].FontSchemeId);
+        if (picker.ShowDialog(FindForm()) == DialogResult.OK)
+            ApplyFontSchemeToSegment(_actionSegmentIndex, picker.SelectedFontSchemeId);
+    }
+
+    private void AppendTextForActionSegment()
+    {
+        if (_actionSegmentIndex < 0 || _actionSegmentIndex >= _segments.Count)
+            return;
+
+        if (ShowAppendTextDialog(FindForm(), out var text))
+            AppendTextToSegment(_actionSegmentIndex, text);
+    }
+
+    private void ApplyFontSchemeToSegment(int segmentIndex, int fontSchemeId)
+    {
+        if (segmentIndex < 0 || segmentIndex >= _segments.Count)
+            return;
+
+        _segments[segmentIndex] = _segments[segmentIndex] with { FontSchemeId = fontSchemeId };
+        if (segmentIndex < _segmentEditors.Count)
+        {
+            var spec = _loader.ResolveFont(fontSchemeId);
+            var editor = _segmentEditors[segmentIndex];
+            editor.Font = GetFont(spec);
+            editor.ForeColor = spec.FillColor;
+        }
+
+        _layoutDirty = true;
+        LayoutSegmentEditors();
+        Invalidate();
+    }
+
+    private void AppendTextToSegment(int segmentIndex, string text)
+    {
+        if (segmentIndex < 0 || segmentIndex >= _segments.Count || string.IsNullOrEmpty(text))
+            return;
+
+        if (segmentIndex < _segmentEditors.Count)
+        {
+            var editor = _segmentEditors[segmentIndex];
+            editor.Text += text;
+            editor.Focus();
+            editor.SelectionStart = editor.TextLength;
+            editor.SelectionLength = 0;
+        }
+        else
+        {
+            _segments[segmentIndex] = _segments[segmentIndex] with { Text = _segments[segmentIndex].Text + text };
+        }
+    }
+
+    private static bool ShowAppendTextDialog(IWin32Window? owner, out string text)
+    {
+        using var dialog = new Form
+        {
+            Text = "文本末尾新增字符串",
+            Size = new Size(420, 150),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            ShowInTaskbar = false,
+        };
+
+        var input = new TextBox
+        {
+            Location = new Point(12, 12),
+            Size = new Size(380, 28),
+            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+        };
+        var okButton = new Button
+        {
+            Text = "确定",
+            Size = new Size(80, 30),
+            Location = new Point(220, 62),
+            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+            DialogResult = DialogResult.OK,
+        };
+        var cancelButton = new Button
+        {
+            Text = "取消",
+            Size = new Size(80, 30),
+            Location = new Point(310, 62),
+            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+            DialogResult = DialogResult.Cancel,
+        };
+
+        dialog.Controls.AddRange([input, okButton, cancelButton]);
+        dialog.AcceptButton = okButton;
+        dialog.CancelButton = cancelButton;
+
+        if (dialog.ShowDialog(owner) == DialogResult.OK)
+        {
+            text = input.Text;
+            return true;
+        }
+
+        text = string.Empty;
+        return false;
+    }
+
+    private TextBox CreateSegmentEditor(int segmentIndex)
+    {
+        var segment = _segments[segmentIndex];
+        var spec = _loader.ResolveFont(segment.FontSchemeId);
+        var editor = new TextBox
+        {
+            Tag = segmentIndex,
+            Multiline = true,
+            WordWrap = true,
+            AcceptsReturn = true,
+            AcceptsTab = false,
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = Color.FromArgb(0x22, 0x22, 0x38),
+            ForeColor = spec.FillColor,
+            Font = GetFont(spec),
+            Text = segment.Text,
+            ScrollBars = ScrollBars.None,
+        };
+
+        editor.TextChanged += SegmentEditorTextChanged;
+        editor.MouseEnter += SegmentEditorMouseEnter;
+        editor.MouseUp += SegmentEditorMouseUp;
+        return editor;
+    }
+
+    private void LayoutSegmentEditors(bool preserveExistingWidths = false)
+    {
+        if (_updatingEditors || _segments.Count == 0 || ClientSize.Width <= PaddingPx * 2)
+            return;
+
+        _updatingEditors = true;
+        try
+        {
+            using var g = CreateGraphics();
+            _layout = ComputeLayout(g);
+            _layoutDirty = false;
+
+            for (var i = 0; i < _segmentEditors.Count && i < _layout.Count; i++)
+            {
+                var editor = _segmentEditors[i];
+                var bounds = _layout[i].Bounds;
+                var measuredWidth = Math.Max(100, (int)Math.Ceiling(Math.Min(
+                    ClientSize.Width - PaddingPx * 2,
+                    Math.Max(bounds.Width, 100))));
+                var width = preserveExistingWidths && editor.Width > 0
+                    ? editor.Width
+                    : measuredWidth;
+                var height = CalculateEditorHeight(g, editor.Text, editor.Font, width, editor.Top);
+                editor.Bounds = new Rectangle(
+                    (int)Math.Ceiling(bounds.X),
+                    (int)Math.Ceiling(bounds.Y),
+                    width,
+                    height);
+                editor.ScrollBars = NeedsEditorScroll(g, editor.Text, editor.Font, width, height)
+                    ? ScrollBars.Vertical
+                    : ScrollBars.None;
+            }
+
+            if (_segmentEditors.Count > 0)
+            {
+                var bottom = _segmentEditors.Max(editor => editor.Bottom);
+                AutoScrollMinSize = new Size(0, bottom + PaddingPx);
+            }
+            else
+            {
+                AutoScrollMinSize = Size.Empty;
+            }
+
+            if (_actionSegmentIndex >= 0)
+                PositionActionButtons(_actionSegmentIndex);
+        }
+        finally
+        {
+            _updatingEditors = false;
+        }
+    }
+
+    private int CalculateEditorHeight(Graphics g, string text, Font font, int editorWidth, int top)
+    {
+        var measureWidth = Math.Max(1, editorWidth - 8);
+        var visualLineCount = 0;
+        foreach (var rawLine in NormalizeEditorText(text).Split('\n'))
+        {
+            var wrappedLines = WrapText(g, rawLine, font, measureWidth);
+            visualLineCount += Math.Max(1, wrappedLines.Count);
+        }
+
+        var desiredHeight = Math.Max(font.Height + 4, visualLineCount * font.Height + 8);
+        var maxHeight = Math.Max(font.Height + 4, ClientSize.Height - Math.Max(0, top) - PaddingPx);
+        return (int)Math.Ceiling((double)Math.Min(maxHeight, desiredHeight));
+    }
+
+    private bool NeedsEditorScroll(Graphics g, string text, Font font, int editorWidth, int editorHeight)
+    {
+        var measureWidth = Math.Max(1, editorWidth - 8);
+        var visualLineCount = 0;
+        foreach (var rawLine in NormalizeEditorText(text).Split('\n'))
+        {
+            var wrappedLines = WrapText(g, rawLine, font, measureWidth);
+            visualLineCount += Math.Max(1, wrappedLines.Count);
+        }
+
+        return visualLineCount * font.Height + 8 > editorHeight;
+    }
+
+    private static string NormalizeEditorText(string text)
+    {
+        return text.Replace("\r\n", "\n").Replace('\r', '\n');
     }
 
     #region Layout Engine
@@ -372,6 +720,7 @@ public sealed class RichTextPreviewPanel : Panel
         _hoveredSegmentIndex = -1;
         _hoverAtSegmentEnd = false;
         Cursor = Cursors.Default;
+        HideActionButtons();
         if (changed) Invalidate();
     }
 
@@ -406,50 +755,15 @@ public sealed class RichTextPreviewPanel : Panel
     {
         if (segmentIndex < 0 || segmentIndex >= _segments.Count) return;
 
-        // Commit any existing edit first
-        if (_overlayEditor != null && _editingSegmentIndex >= 0)
-            CommitEdit();
-
         _editingSegmentIndex = segmentIndex;
         _hoveredSegmentIndex = -1;
+        _overlayEditor = segmentIndex < _segmentEditors.Count ? _segmentEditors[segmentIndex] : null;
 
-        using var g = CreateGraphics();
-        EnsureLayout(g);
-
-        if (segmentIndex >= _layout.Count) return;
-
-        var segLayout = _layout[segmentIndex];
-        var segment = _segments[segmentIndex];
-        var spec = _loader.ResolveFont(segment.FontSchemeId);
-        var font = GetFont(spec);
-
-        _overlayEditor = new TextBox
+        if (_overlayEditor is not null)
         {
-            Multiline = true,
-            WordWrap = true,
-            Font = font,
-            ForeColor = spec.FillColor,
-            BackColor = Color.FromArgb(0x22, 0x22, 0x38),
-            BorderStyle = BorderStyle.FixedSingle,
-            Location = new Point(
-                (int)segLayout.Bounds.X + AutoScrollPosition.X,
-                (int)segLayout.Bounds.Y + AutoScrollPosition.Y),
-            Size = new Size(
-                Math.Max((int)segLayout.Bounds.Width, 100),
-                Math.Max((int)segLayout.Bounds.Height, font.Height + 4)),
-            Text = segment.Text,
-            AcceptsReturn = true,
-            AcceptsTab = false,
-            ScrollBars = ScrollBars.None,
-        };
-
-        _overlayEditor.LostFocus += OnOverlayLostFocus;
-        _overlayEditor.KeyDown += OnOverlayKeyDown;
-        _overlayEditor.TextChanged += OnOverlayTextChanged;
-
-        Controls.Add(_overlayEditor);
-        _overlayEditor.Focus();
-        _overlayEditor.SelectAll();
+            _overlayEditor.Focus();
+            _overlayEditor.SelectAll();
+        }
 
         EditingStarted?.Invoke();
         Invalidate();
@@ -457,15 +771,11 @@ public sealed class RichTextPreviewPanel : Panel
 
     public void CommitEdit()
     {
-        if (_overlayEditor == null || _editingSegmentIndex < 0) return;
-
-        var newText = _overlayEditor.Text.Replace("\r\n", "\n");
-        if (_editingSegmentIndex < _segments.Count)
+        for (var i = 0; i < _segmentEditors.Count && i < _segments.Count; i++)
         {
-            _segments[_editingSegmentIndex] = _segments[_editingSegmentIndex] with { Text = newText };
+            _segments[i] = _segments[i] with { Text = NormalizeEditorText(_segmentEditors[i].Text) };
         }
 
-        RemoveOverlay();
         _layoutDirty = true;
         Invalidate();
         EditingFinished?.Invoke();
@@ -473,74 +783,8 @@ public sealed class RichTextPreviewPanel : Panel
 
     public void CancelEdit()
     {
-        if (_overlayEditor == null) return;
-        RemoveOverlay();
-        Invalidate();
-    }
-
-    private void RemoveOverlay()
-    {
-        if (_overlayEditor == null) return;
-        _overlayEditor.LostFocus -= OnOverlayLostFocus;
-        _overlayEditor.KeyDown -= OnOverlayKeyDown;
-        _overlayEditor.TextChanged -= OnOverlayTextChanged;
-        Controls.Remove(_overlayEditor);
-        _overlayEditor.Dispose();
         _overlayEditor = null;
         _editingSegmentIndex = -1;
-    }
-
-    private void OnOverlayLostFocus(object? sender, EventArgs e)
-    {
-        // Delay to allow button clicks (like font picker) to process first
-        BeginInvoke(new Action(() =>
-        {
-            if (_overlayEditor != null && _editingSegmentIndex >= 0)
-                CommitEdit();
-        }));
-    }
-
-    private void OnOverlayKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.KeyCode == Keys.Escape)
-        {
-            e.Handled = true;
-            CancelEdit();
-        }
-    }
-
-    private void OnOverlayTextChanged(object? sender, EventArgs e)
-    {
-        ResizeOverlayEditorToText();
-    }
-
-    private void ResizeOverlayEditorToText()
-    {
-        if (_overlayEditor == null) return;
-
-        using var g = CreateGraphics();
-        var editorWidth = _overlayEditor.Width;
-        var measureWidth = Math.Max(1, editorWidth - 8);
-        var visualLineCount = 0;
-
-        foreach (var rawLine in _overlayEditor.Text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
-        {
-            var wrappedLines = WrapText(g, rawLine, _overlayEditor.Font, measureWidth);
-            visualLineCount += Math.Max(1, wrappedLines.Count);
-        }
-
-        var desiredHeight = Math.Max(_overlayEditor.Font.Height + 4, visualLineCount * _overlayEditor.Font.Height + 8);
-        var maxHeight = Math.Max(_overlayEditor.Font.Height + 4, ClientSize.Height - Math.Max(0, _overlayEditor.Top) - PaddingPx);
-        var newSize = new Size(
-            editorWidth,
-            (int)Math.Ceiling((double)Math.Min(maxHeight, desiredHeight)));
-        var newScrollBars = desiredHeight > maxHeight ? ScrollBars.Vertical : ScrollBars.None;
-
-        if (_overlayEditor.Size != newSize)
-            _overlayEditor.Size = newSize;
-        if (_overlayEditor.ScrollBars != newScrollBars)
-            _overlayEditor.ScrollBars = newScrollBars;
-
         Invalidate();
     }
 
@@ -744,7 +988,6 @@ public sealed class RichTextPreviewPanel : Panel
     {
         if (disposing)
         {
-            _overlayEditor?.Dispose();
             _contextMenu?.Dispose();
 
             foreach (var font in _fontCache.Values)

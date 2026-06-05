@@ -307,12 +307,8 @@ public sealed class RichTextEditorForm : Form
 
     private void OnOkClick(object? sender, EventArgs e)
     {
-        // Commit any pending edit
-        if (_editingSegmentIndex >= 0)
-        {
-            _previewPanel.CommitEdit();
-            SyncFromPreview();
-        }
+        _previewPanel.CommitEdit();
+        SyncFromPreview();
 
         ResultMarkup = RichTextMarkup.Serialize(_document);
         DialogResult = DialogResult.OK;
