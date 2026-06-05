@@ -22,7 +22,7 @@ public sealed class RichTextPreviewPanel : Panel
     private readonly Dictionary<string, PrivateFontCollection> _pfcCache = [];
     private const int PaddingPx = 12;
     private const int LineSpacing = 4;
-    internal const int SegmentEndHitWidth = 14;
+    private const int SegmentEndHitWidth = 14;
 
     private int _hoveredSegmentIndex = -1;
     private bool _hoverAtSegmentEnd;
@@ -55,29 +55,6 @@ public sealed class RichTextPreviewPanel : Panel
         _segments = segments;
         _layoutDirty = true;
         Invalidate();
-    }
-
-    public (float Width, float Height) MeasureContentSize()
-    {
-        if (_segments.Count == 0) return (0, 0);
-        using var g = CreateGraphics();
-        var totalHeight = 0f;
-        var maxWidth = 0f;
-        foreach (var seg in _segments)
-        {
-            var spec = _loader.ResolveFont(seg.FontSchemeId);
-            var font = GetFont(spec);
-            var lines = seg.Text.Split('\n');
-            foreach (var line in lines)
-            {
-                if (string.IsNullOrEmpty(line)) { totalHeight += font.Height; continue; }
-                var w = g.MeasureString(line, font).Width + PaddingPx * 2;
-                maxWidth = Math.Max(maxWidth, w);
-                totalHeight += font.Height;
-            }
-            totalHeight += LineSpacing;
-        }
-        return (maxWidth, totalHeight);
     }
 
     protected override void OnResize(EventArgs e)
@@ -300,26 +277,17 @@ public sealed class RichTextPreviewPanel : Panel
     {
         base.OnMouseClick(e);
         if (e.Button != MouseButtons.Left) return;
+        if (_overlayEditor != null) return;
 
-        if (_overlayEditor != null)
+        var hit = HitTest(e.Location);
+
+        if (hit.IsAtSegmentEnd && hit.SegmentIndex >= 0)
         {
-            var hit = HitTest(e.Location);
-            if (hit.SegmentIndex != _editingSegmentIndex)
-            {
-                CommitEdit();
-            }
-            return;
+            NewSegmentRequested?.Invoke(hit.SegmentIndex);
         }
-
-        var hit2 = HitTest(e.Location);
-
-        if (hit2.IsAtSegmentEnd && hit2.SegmentIndex >= 0)
+        else if (hit.SegmentIndex >= 0)
         {
-            NewSegmentRequested?.Invoke(hit2.SegmentIndex);
-        }
-        else if (hit2.SegmentIndex >= 0)
-        {
-            SegmentClicked?.Invoke(hit2.SegmentIndex);
+            SegmentClicked?.Invoke(hit.SegmentIndex);
         }
     }
 
@@ -415,7 +383,6 @@ public sealed class RichTextPreviewPanel : Panel
 
         _overlayEditor.LostFocus += OnOverlayLostFocus;
         _overlayEditor.KeyDown += OnOverlayKeyDown;
-        _overlayEditor.TextChanged += OnOverlayTextChanged;
 
         Controls.Add(_overlayEditor);
         _overlayEditor.Focus();
@@ -453,7 +420,6 @@ public sealed class RichTextPreviewPanel : Panel
         if (_overlayEditor == null) return;
         _overlayEditor.LostFocus -= OnOverlayLostFocus;
         _overlayEditor.KeyDown -= OnOverlayKeyDown;
-        _overlayEditor.TextChanged -= OnOverlayTextChanged;
         Controls.Remove(_overlayEditor);
         _overlayEditor.Dispose();
         _overlayEditor = null;
@@ -476,24 +442,6 @@ public sealed class RichTextPreviewPanel : Panel
         {
             e.Handled = true;
             CancelEdit();
-        }
-    }
-
-    private void OnOverlayTextChanged(object? sender, EventArgs e)
-    {
-        if (_overlayEditor == null) return;
-
-        var lineCount = _overlayEditor.Lines.Length;
-        var lineHeight = _overlayEditor.Font.Height;
-        var textHeight = lineCount * lineHeight + 8;
-
-        var currentSize = _overlayEditor.Size;
-        var newHeight = Math.Max(textHeight, _overlayEditor.Font.Height + 4);
-
-        if (currentSize.Height != newHeight)
-        {
-            _overlayEditor.Size = new Size(currentSize.Width, newHeight);
-            Invalidate();
         }
     }
 
@@ -577,13 +525,9 @@ public sealed class RichTextPreviewPanel : Panel
         }
 
         // Edit highlight
-        if (_editingSegmentIndex >= 0 && _overlayEditor != null)
+        if (_editingSegmentIndex >= 0 && _editingSegmentIndex < _layout.Count)
         {
-            var bounds = new RectangleF(
-                _overlayEditor.Location.X - AutoScrollPosition.X - 2,
-                _overlayEditor.Location.Y - AutoScrollPosition.Y - 2,
-                _overlayEditor.Width + 4,
-                _overlayEditor.Height + 4);
+            var bounds = _layout[_editingSegmentIndex].Bounds;
             using var pen = new Pen(Color.FromArgb(0x00, 0x7A, 0xCC), 2f);
             using var brush = new SolidBrush(Color.FromArgb(0x18, 0x00, 0x7A, 0xCC));
             g.FillRectangle(brush, bounds);
