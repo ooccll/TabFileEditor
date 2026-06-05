@@ -583,9 +583,9 @@ public sealed class MainForm : Form
         _timeFieldButton.Text = "设置";
         _timeFieldButton.Visible = false;
         _timeFieldButton.FlatStyle = FlatStyle.Flat;
-        _timeFieldButton.BackColor = PanelBg;
-        _timeFieldButton.ForeColor = TextColor;
-        _timeFieldButton.FlatAppearance.BorderColor = BorderColor;
+        _timeFieldButton.BackColor = AccentColor;
+        _timeFieldButton.ForeColor = Color.White;
+        _timeFieldButton.FlatAppearance.BorderColor = AccentColor;
         _timeFieldButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
         _timeFieldButton.AutoSize = true;
         _timeFieldButton.AutoSizeMode = AutoSizeMode.GrowOnly;

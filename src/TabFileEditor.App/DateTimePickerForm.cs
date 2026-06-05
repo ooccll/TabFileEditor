@@ -18,7 +18,7 @@ public sealed class DateTimePickerForm : Form
     public DateTimePickerForm(DateTime initialDateTime)
     {
         Text = "选择日期时间";
-        Size = new Size(320, 200);
+        Size = new Size(320, 240);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
