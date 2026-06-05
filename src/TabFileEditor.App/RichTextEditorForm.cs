@@ -1,5 +1,3 @@
-using System.Drawing.Text;
-
 namespace TabFileEditor.App;
 
 public sealed class RichTextEditorForm : Form
@@ -7,16 +5,21 @@ public sealed class RichTextEditorForm : Form
     private readonly ElemSchemeLoader _loader;
     private readonly RichTextDocument _document;
     private readonly RichTextPreviewPanel _previewPanel;
-    private readonly DataGridView _segmentGrid;
     private readonly Button _okButton;
     private readonly Button _cancelButton;
-    private readonly ContextMenuStrip _contextMenu;
-    private bool _updatingGrid;
+
+    private readonly Panel _fontBar;
+    private readonly Label _fontLabel;
+    private readonly Button _fontPickerButton;
+
+    private int _editingSegmentIndex = -1;
+    private bool _reenteringEdit;
 
     public string ResultMarkup { get; private set; } = "";
 
     private static readonly Color WindowBg = Color.FromArgb(0xF6, 0xF8, 0xFB);
     private static readonly Color AccentColor = Color.FromArgb(0x00, 0x7A, 0xCC);
+    private static readonly Color FontBarBg = Color.FromArgb(0x2A, 0x2A, 0x3E);
 
     public RichTextEditorForm(string markup, ElemSchemeLoader loader)
     {
@@ -24,7 +27,7 @@ public sealed class RichTextEditorForm : Form
         _document = RichTextMarkup.Parse(markup);
 
         Text = "富文本编辑器";
-        Size = new Size(900, 700);
+        Size = new Size(900, 750);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
@@ -33,60 +36,55 @@ public sealed class RichTextEditorForm : Form
 
         _previewPanel = new RichTextPreviewPanel(loader)
         {
-            Dock = DockStyle.Top,
-            Height = 250,
+            Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.FixedSingle,
         };
 
-        _segmentGrid = new DataGridView
+        _previewPanel.SegmentClicked += OnSegmentClicked;
+        _previewPanel.NewSegmentRequested += OnNewSegmentRequested;
+        _previewPanel.SegmentDeleteRequested += OnSegmentDeleteRequested;
+        _previewPanel.SegmentMoveUpRequested += OnSegmentMoveUpRequested;
+        _previewPanel.SegmentMoveDownRequested += OnSegmentMoveDownRequested;
+        _previewPanel.SegmentInsertAfterRequested += OnSegmentInsertAfterRequested;
+        _previewPanel.EditingStarted += OnEditingStarted;
+        _previewPanel.EditingFinished += OnEditingFinished;
+
+        // Font bar
+        _fontBar = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 36,
+            BackColor = FontBarBg,
+            Visible = false,
+        };
+
+        _fontLabel = new Label
         {
             Dock = DockStyle.Fill,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            MultiSelect = false,
-            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.DisplayedCellsExceptHeaders,
-            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
-            BackgroundColor = Color.White,
-            RowHeadersVisible = false,
-        };
-
-        _contextMenu = new ContextMenuStrip();
-        _contextMenu.Items.Add("在此之后插入段落", null, OnInsertSegmentAfter);
-        _contextMenu.Items.Add("删除段落", null, OnDeleteSegment);
-        _contextMenu.Items.Add("-");
-        _contextMenu.Items.Add("上移", null, OnMoveSegmentUp);
-        _contextMenu.Items.Add("下移", null, OnMoveSegmentDown);
-
-        _segmentGrid.CellValueChanged += OnSegmentGridCellValueChanged;
-        _segmentGrid.CellClick += OnSegmentGridCellClick;
-        _segmentGrid.CellContextMenuStripNeeded += (_, e) =>
-        {
-            if (e.RowIndex >= 0) _contextMenu.Show(_segmentGrid, _segmentGrid.PointToClient(Cursor.Position));
-        };
-
-        var previewLabel = new Label
-        {
-            Text = "  预览",
-            Dock = DockStyle.Top,
-            Height = 28,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0x47, 0x55, 0x69),
-            BackColor = WindowBg,
+            ForeColor = Color.White,
+            Font = new Font("Microsoft YaHei UI", 9F),
+            Padding = new Padding(8, 0, 0, 0),
         };
 
-        var segmentLabel = new Label
+        _fontPickerButton = new Button
         {
-            Text = "  段落列表",
-            Dock = DockStyle.Top,
-            Height = 28,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0x47, 0x55, 0x69),
-            BackColor = WindowBg,
+            Text = "...",
+            Size = new Size(36, 28),
+            Anchor = AnchorStyles.Right | AnchorStyles.Top,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(0x3A, 0x3A, 0x4E),
+            ForeColor = Color.White,
+            Cursor = Cursors.Hand,
         };
+        _fontPickerButton.FlatAppearance.BorderColor = Color.FromArgb(0x50, 0x50, 0x64);
+        _fontPickerButton.Click += OnFontPickerClick;
 
+        _fontBar.Controls.Add(_fontLabel);
+        _fontBar.Controls.Add(_fontPickerButton);
+        _fontPickerButton.Location = new Point(_fontBar.Width - 44, 4);
+
+        // Bottom panel with OK/Cancel
         var bottomPanel = new Panel
         {
             Dock = DockStyle.Bottom,
@@ -121,90 +119,15 @@ public sealed class RichTextEditorForm : Form
 
         bottomPanel.Controls.AddRange([_okButton, _cancelButton]);
 
-        var centerPanel = new Panel { Dock = DockStyle.Fill };
-        centerPanel.Controls.Add(_segmentGrid);
-        centerPanel.Controls.Add(segmentLabel);
-
-        Controls.Add(centerPanel);
-        Controls.Add(bottomPanel);
+        // WinForms Z-order: add Fill first, then Bottom panels on top
         Controls.Add(_previewPanel);
-        Controls.Add(previewLabel);
+        Controls.Add(_fontBar);
+        Controls.Add(bottomPanel);
 
         AcceptButton = _okButton;
         CancelButton = _cancelButton;
 
-        InitSegmentGrid();
         RefreshPreview();
-    }
-
-    private void InitSegmentGrid()
-    {
-        _updatingGrid = true;
-
-        _segmentGrid.Columns.Clear();
-
-        var fontIdCol = new DataGridViewTextBoxColumn
-        {
-            HeaderText = "字体ID",
-            Name = "FontSchemeId",
-            Width = 60,
-            ReadOnly = true,
-        };
-
-        var fontNameCol = new DataGridViewTextBoxColumn
-        {
-            HeaderText = "字体名称",
-            Name = "FontName",
-            Width = 160,
-            ReadOnly = true,
-        };
-
-        var colorCol = new DataGridViewTextBoxColumn
-        {
-            HeaderText = "颜色",
-            Name = "Color",
-            Width = 80,
-            ReadOnly = true,
-        };
-
-        var textCol = new DataGridViewTextBoxColumn
-        {
-            HeaderText = "文本内容",
-            Name = "Text",
-            Width = 360,
-            ReadOnly = false,
-        };
-
-        var changeFontCol = new DataGridViewButtonColumn
-        {
-            HeaderText = "",
-            Text = "...",
-            Name = "ChangeFont",
-            Width = 50,
-            UseColumnTextForButtonValue = true,
-        };
-
-        _segmentGrid.Columns.AddRange([fontIdCol, fontNameCol, colorCol, textCol, changeFontCol]);
-
-        PopulateGridRows();
-        _updatingGrid = false;
-    }
-
-    private void PopulateGridRows()
-    {
-        _segmentGrid.Rows.Clear();
-        foreach (var seg in _document.Segments)
-        {
-            var scheme = _loader.FontSchemes.GetValueOrDefault(seg.FontSchemeId);
-            var row = new DataGridViewRow();
-            row.CreateCells(_segmentGrid,
-                seg.FontSchemeId,
-                scheme?.Name ?? "",
-                scheme?.Color ?? "",
-                seg.Text,
-                "");
-            _segmentGrid.Rows.Add(row);
-        }
     }
 
     private void RefreshPreview()
@@ -212,106 +135,151 @@ public sealed class RichTextEditorForm : Form
         _previewPanel.SetSegments(_document.Segments);
     }
 
-    private void OnSegmentGridCellValueChanged(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (_updatingGrid || e.RowIndex < 0) return;
-        if (_segmentGrid.Columns[e.ColumnIndex].Name != "Text") return;
+    #region Preview Panel Event Handlers
 
-        var newText = _segmentGrid.Rows[e.RowIndex].Cells["Text"].Value?.ToString() ?? "";
-        if (e.RowIndex < _document.Segments.Count)
-        {
-            _document.Segments[e.RowIndex] = _document.Segments[e.RowIndex] with { Text = newText };
-            RefreshPreview();
-        }
+    private void OnSegmentClicked(int segmentIndex)
+    {
+        _editingSegmentIndex = segmentIndex;
+        _previewPanel.BeginEdit(segmentIndex);
+        ShowFontBar(segmentIndex);
     }
 
-    private void OnSegmentGridCellClick(object? sender, DataGridViewCellEventArgs e)
+    private void OnNewSegmentRequested(int afterIndex)
     {
-        if (e.RowIndex < 0) return;
-        if (_segmentGrid.Columns[e.ColumnIndex].Name != "ChangeFont") return;
+        var fontId = afterIndex < _document.Segments.Count
+            ? _document.Segments[afterIndex].FontSchemeId
+            : 18;
+        var newSeg = new RichTextSegment("", fontId);
+        _document.Segments.Insert(afterIndex + 1, newSeg);
+        RefreshPreview();
 
-        var currentFontId = _document.Segments[e.RowIndex].FontSchemeId;
+        // Enter edit mode for the new segment
+        _editingSegmentIndex = afterIndex + 1;
+        _previewPanel.BeginEdit(afterIndex + 1);
+        ShowFontBar(afterIndex + 1);
+    }
+
+    private void OnSegmentDeleteRequested(int segmentIndex)
+    {
+        if (_document.Segments.Count <= 1) return;
+        if (segmentIndex < 0 || segmentIndex >= _document.Segments.Count) return;
+
+        _document.Segments.RemoveAt(segmentIndex);
+        RefreshPreview();
+    }
+
+    private void OnSegmentMoveUpRequested(int segmentIndex)
+    {
+        if (segmentIndex <= 0) return;
+        (_document.Segments[segmentIndex - 1], _document.Segments[segmentIndex]) =
+            (_document.Segments[segmentIndex], _document.Segments[segmentIndex - 1]);
+        RefreshPreview();
+    }
+
+    private void OnSegmentMoveDownRequested(int segmentIndex)
+    {
+        if (segmentIndex >= _document.Segments.Count - 1) return;
+        (_document.Segments[segmentIndex], _document.Segments[segmentIndex + 1]) =
+            (_document.Segments[segmentIndex + 1], _document.Segments[segmentIndex]);
+        RefreshPreview();
+    }
+
+    private void OnSegmentInsertAfterRequested(int segmentIndex)
+    {
+        var fontId = segmentIndex < _document.Segments.Count
+            ? _document.Segments[segmentIndex].FontSchemeId
+            : 18;
+        var newSeg = new RichTextSegment("", fontId);
+        _document.Segments.Insert(segmentIndex + 1, newSeg);
+        RefreshPreview();
+
+        _editingSegmentIndex = segmentIndex + 1;
+        _previewPanel.BeginEdit(segmentIndex + 1);
+        ShowFontBar(segmentIndex + 1);
+    }
+
+    private void OnEditingStarted()
+    {
+    }
+
+    private void OnEditingFinished()
+    {
+        SyncFromPreview();
+
+        // Don't reset state if we're about to re-enter edit mode (e.g. font picker)
+        if (_reenteringEdit) return;
+
+        HideFontBar();
+        _editingSegmentIndex = -1;
+    }
+
+    private void SyncFromPreview()
+    {
+        var segments = _previewPanel.Segments;
+        _document.Segments.Clear();
+        _document.Segments.AddRange(segments);
+    }
+
+    #endregion
+
+    #region Font Bar
+
+    private void ShowFontBar(int segmentIndex)
+    {
+        if (segmentIndex < 0 || segmentIndex >= _document.Segments.Count) return;
+
+        var fontSchemeId = _document.Segments[segmentIndex].FontSchemeId;
+        var scheme = _loader.FontSchemes.GetValueOrDefault(fontSchemeId);
+        _fontLabel.Text = $"  字体: {scheme?.Name ?? "未知"} (ID {fontSchemeId})";
+        _fontBar.Visible = true;
+    }
+
+    private void HideFontBar()
+    {
+        _fontBar.Visible = false;
+    }
+
+    private void OnFontPickerClick(object? sender, EventArgs e)
+    {
+        if (_editingSegmentIndex < 0 || _editingSegmentIndex >= _document.Segments.Count) return;
+
+        var editIdx = _editingSegmentIndex;
+        var currentFontId = _document.Segments[editIdx].FontSchemeId;
+
+        // Prevent EditingFinished from resetting state when overlay loses focus to the dialog
+        _reenteringEdit = true;
         using var picker = new FontSchemePickerForm(_loader, currentFontId);
-        if (picker.ShowDialog(this) != DialogResult.OK) return;
+        if (picker.ShowDialog(this) != DialogResult.OK)
+        {
+            _reenteringEdit = false;
+            // Re-enter edit mode even on cancel
+            _previewPanel.SetSegments(_document.Segments);
+            _editingSegmentIndex = editIdx;
+            _previewPanel.BeginEdit(editIdx);
+            return;
+        }
+        _reenteringEdit = false;
 
         var newFontId = picker.SelectedFontSchemeId;
-        _document.Segments[e.RowIndex] = _document.Segments[e.RowIndex] with { FontSchemeId = newFontId };
+        _document.Segments[editIdx] = _document.Segments[editIdx] with { FontSchemeId = newFontId };
 
-        _updatingGrid = true;
-        var scheme = _loader.FontSchemes.GetValueOrDefault(newFontId);
-        _segmentGrid.Rows[e.RowIndex].Cells["FontSchemeId"].Value = newFontId;
-        _segmentGrid.Rows[e.RowIndex].Cells["FontName"].Value = scheme?.Name ?? "";
-        _segmentGrid.Rows[e.RowIndex].Cells["Color"].Value = scheme?.Color ?? "";
-        _updatingGrid = false;
-
-        RefreshPreview();
+        _previewPanel.SetSegments(_document.Segments);
+        ShowFontBar(editIdx);
+        _editingSegmentIndex = editIdx;
+        _previewPanel.BeginEdit(editIdx);
     }
 
-    private void OnInsertSegmentAfter(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        var idx = row.Index;
-        var fontId = idx < _document.Segments.Count ? _document.Segments[idx].FontSchemeId : 18;
-        var newSeg = new RichTextSegment("", fontId);
-        _document.Segments.Insert(idx + 1, newSeg);
-
-        _updatingGrid = true;
-        PopulateGridRows();
-        _updatingGrid = false;
-        RefreshPreview();
-    }
-
-    private void OnDeleteSegment(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        if (_document.Segments.Count <= 1) return;
-        var idx = row.Index;
-        if (idx >= 0 && idx < _document.Segments.Count)
-        {
-            _document.Segments.RemoveAt(idx);
-            _updatingGrid = true;
-            PopulateGridRows();
-            _updatingGrid = false;
-            RefreshPreview();
-        }
-    }
-
-    private void OnMoveSegmentUp(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        var idx = row.Index;
-        if (idx <= 0) return;
-
-        (_document.Segments[idx - 1], _document.Segments[idx]) =
-            (_document.Segments[idx], _document.Segments[idx - 1]);
-
-        _updatingGrid = true;
-        PopulateGridRows();
-        _segmentGrid.ClearSelection();
-        _segmentGrid.Rows[idx - 1].Selected = true;
-        _updatingGrid = false;
-        RefreshPreview();
-    }
-
-    private void OnMoveSegmentDown(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        var idx = row.Index;
-        if (idx >= _document.Segments.Count - 1) return;
-
-        (_document.Segments[idx], _document.Segments[idx + 1]) =
-            (_document.Segments[idx + 1], _document.Segments[idx]);
-
-        _updatingGrid = true;
-        PopulateGridRows();
-        _segmentGrid.ClearSelection();
-        _segmentGrid.Rows[idx + 1].Selected = true;
-        _updatingGrid = false;
-        RefreshPreview();
-    }
+    #endregion
 
     private void OnOkClick(object? sender, EventArgs e)
     {
+        // Commit any pending edit
+        if (_editingSegmentIndex >= 0)
+        {
+            _previewPanel.CommitEdit();
+            SyncFromPreview();
+        }
+
         ResultMarkup = RichTextMarkup.Serialize(_document);
         DialogResult = DialogResult.OK;
         Close();
@@ -324,6 +292,8 @@ public sealed class RichTextEditorForm : Form
             _okButton.Location = new Point(ClientSize.Width - 190, 8);
         if (_cancelButton is not null)
             _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        if (_fontPickerButton is not null)
+            _fontPickerButton.Location = new Point(_fontBar.Width - 44, 4);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
