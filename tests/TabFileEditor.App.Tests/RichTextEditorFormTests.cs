@@ -53,6 +53,63 @@ public sealed class RichTextEditorFormTests : IDisposable
     }
 
     [Fact]
+    public void RichTextEditorFormKeepsTextAfterBlankClickCommit()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = new RichTextEditorForm("<text>text=\"原文字\" font=18</text>", CreateLoader());
+            form.CreateControl();
+            var panel = FindDescendant<RichTextPreviewPanel>(form);
+            panel.BeginEdit(0);
+            var editor = FindOverlayEditor(panel);
+            editor.Text = "修改后的文字";
+
+            InvokeMouseClick(panel, new Point(panel.ClientSize.Width - 20, panel.ClientSize.Height - 20));
+            InvokePrivate(form, "OnOkClick", null!, EventArgs.Empty);
+
+            Assert.Contains("修改后的文字", form.ResultMarkup);
+            Assert.Contains("<text>", form.ResultMarkup);
+        });
+    }
+
+    [Fact]
+    public void RichTextPreviewPanelDoesNotMutateSourceSegmentList()
+    {
+        RunOnStaThread(() =>
+        {
+            var sourceSegments = new List<RichTextSegment> { new("原文字", 18) };
+            using var panel = CreatePanel(sourceSegments);
+            panel.BeginEdit(0);
+            FindOverlayEditor(panel).Text = "修改后的文字";
+
+            panel.CommitEdit();
+
+            Assert.Equal("原文字", sourceSegments[0].Text);
+            Assert.Equal("修改后的文字", panel.Segments[0].Text);
+        });
+    }
+
+    [Fact]
+    public void RichTextOverlayEditorKeepsWrappedLayoutWidthWhenTextChanges()
+    {
+        RunOnStaThread(() =>
+        {
+            var longText = string.Concat(Enumerable.Repeat("这是一段需要自动换行的富文本内容", 8));
+            using var panel = CreatePanel([new RichTextSegment(longText, 18)]);
+            panel.Size = new Size(240, 240);
+            panel.BeginEdit(0);
+            var editor = FindOverlayEditor(panel);
+            var initialWidth = editor.Width;
+
+            editor.Text = longText + longText;
+
+            Assert.Equal(initialWidth, editor.Width);
+            Assert.True(editor.Height > editor.Font.Height * 2);
+            Assert.True(editor.Width <= panel.ClientSize.Width - 24);
+        });
+    }
+
+    [Fact]
     public void RichTextOverlayEditorResizesWhenTextChanges()
     {
         RunOnStaThread(() =>
@@ -129,6 +186,38 @@ public sealed class RichTextEditorFormTests : IDisposable
         return null;
     }
 
+    private static TControl FindDescendant<TControl>(Control parent)
+        where TControl : Control
+    {
+        foreach (Control child in parent.Controls)
+        {
+            if (child is TControl match)
+                return match;
+
+            var nested = FindDescendantOrNull<TControl>(child);
+            if (nested is not null)
+                return nested;
+        }
+
+        throw new InvalidOperationException($"Could not find {typeof(TControl).Name}.");
+    }
+
+    private static TControl? FindDescendantOrNull<TControl>(Control parent)
+        where TControl : Control
+    {
+        foreach (Control child in parent.Controls)
+        {
+            if (child is TControl match)
+                return match;
+
+            var nested = FindDescendantOrNull<TControl>(child);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
     private static void InvokeMouseClick(RichTextPreviewPanel panel, Point location)
     {
         var method = typeof(RichTextPreviewPanel).GetMethod(
@@ -136,6 +225,15 @@ public sealed class RichTextEditorFormTests : IDisposable
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
         method.Invoke(panel, [new MouseEventArgs(MouseButtons.Left, 1, location.X, location.Y, 0)]);
+    }
+
+    private static void InvokePrivate(object target, string methodName, params object[] args)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method.Invoke(target, args);
     }
 
     private static void RunOnStaThread(Action action)

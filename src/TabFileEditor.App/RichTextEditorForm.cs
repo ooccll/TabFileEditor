@@ -249,7 +249,7 @@ public sealed class RichTextEditorForm : Form
 
     private void SyncFromPreview()
     {
-        var segments = _previewPanel.Segments;
+        var segments = _previewPanel.Segments.ToList();
         _document.Segments.Clear();
         _document.Segments.AddRange(segments);
     }

@@ -52,7 +52,7 @@ public sealed class RichTextPreviewPanel : Panel
 
     public void SetSegments(List<RichTextSegment> segments)
     {
-        _segments = segments;
+        _segments = segments.ToList();
         _layoutDirty = true;
         Invalidate();
     }
@@ -519,30 +519,20 @@ public sealed class RichTextPreviewPanel : Panel
         if (_overlayEditor == null) return;
 
         using var g = CreateGraphics();
-        var layoutX = _overlayEditor.Left - AutoScrollPosition.X;
-        var maxWidth = Math.Max(100, ClientSize.Width - PaddingPx - layoutX);
-        var measureWidth = Math.Max(1, maxWidth - 8);
-        var desiredWidth = 100f;
+        var editorWidth = _overlayEditor.Width;
+        var measureWidth = Math.Max(1, editorWidth - 8);
         var visualLineCount = 0;
 
         foreach (var rawLine in _overlayEditor.Text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
         {
             var wrappedLines = WrapText(g, rawLine, _overlayEditor.Font, measureWidth);
             visualLineCount += Math.Max(1, wrappedLines.Count);
-
-            foreach (var wrappedLine in wrappedLines)
-            {
-                var lineWidth = string.IsNullOrEmpty(wrappedLine)
-                    ? 0
-                    : g.MeasureString(wrappedLine, _overlayEditor.Font).Width + 10;
-                desiredWidth = Math.Max(desiredWidth, lineWidth);
-            }
         }
 
         var desiredHeight = Math.Max(_overlayEditor.Font.Height + 4, visualLineCount * _overlayEditor.Font.Height + 8);
         var maxHeight = Math.Max(_overlayEditor.Font.Height + 4, ClientSize.Height - Math.Max(0, _overlayEditor.Top) - PaddingPx);
         var newSize = new Size(
-            (int)Math.Ceiling((double)Math.Min(maxWidth, desiredWidth)),
+            editorWidth,
             (int)Math.Ceiling((double)Math.Min(maxHeight, desiredHeight)));
         var newScrollBars = desiredHeight > maxHeight ? ScrollBars.Vertical : ScrollBars.None;
 
