@@ -30,7 +30,7 @@ public static class RichTextMarkup
         foreach (Match match in TextElementRegex.Matches(markup))
         {
             var text = match.Groups[1].Value;
-            text = text.Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\n");
+            text = text.Replace("\r\n", "\\\\n").Replace("\n", "\\\\n").Replace("\r", "\\\\n");
             var fontId = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
             segments.Add(new RichTextSegment(text, fontId));
         }
@@ -42,7 +42,7 @@ public static class RichTextMarkup
         var sb = new StringBuilder();
         foreach (var segment in doc.Segments)
         {
-            var text = segment.Text.Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\n");
+            var text = segment.Text.Replace("\r\n", "\\\\n").Replace("\n", "\\\\n").Replace("\r", "\\\\n");
             sb.Append($"<text>text=\"{text}\" font={segment.FontSchemeId}</text>");
         }
         return sb.ToString();

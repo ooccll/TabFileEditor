@@ -80,7 +80,7 @@ public sealed class RichTextPreviewPanel : Panel
             var segment = _segments[si];
             var spec = _loader.ResolveFont(segment.FontSchemeId);
             var font = GetFont(spec);
-            var text = segment.Text.Replace("\\n", "\n");
+            var text = segment.Text.Replace("\\\\n", "\n");
             var lines = text.Split('\n');
 
             var segLines = new List<LineLayout>();
@@ -375,7 +375,7 @@ public sealed class RichTextPreviewPanel : Panel
             Size = new Size(
                 Math.Max((int)segLayout.Bounds.Width, 100),
                 Math.Max((int)segLayout.Bounds.Height, font.Height + 4)),
-            Text = segment.Text.Replace("\\n", "\n"),
+            Text = segment.Text.Replace("\\\\n", "\n"),
             AcceptsReturn = true,
             AcceptsTab = false,
             ScrollBars = ScrollBars.None,
@@ -396,7 +396,7 @@ public sealed class RichTextPreviewPanel : Panel
     {
         if (_overlayEditor == null || _editingSegmentIndex < 0) return;
 
-        var newText = _overlayEditor.Text.Replace("\r\n", "\\n").Replace("\n", "\\n");
+        var newText = _overlayEditor.Text.Replace("\r\n", "\\\\n").Replace("\n", "\\\\n");
         if (_editingSegmentIndex < _segments.Count)
         {
             _segments[_editingSegmentIndex] = _segments[_editingSegmentIndex] with { Text = newText };
