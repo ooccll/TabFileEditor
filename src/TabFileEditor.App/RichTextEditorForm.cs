@@ -64,15 +64,8 @@ public sealed class RichTextEditorForm : Form
         _expandedTextEditor.AcceptsTab = false;
         _expandedTextEditor.BorderStyle = BorderStyle.FixedSingle;
         _expandedTextEditor.ScrollBars = ScrollBars.Vertical;
-        _expandedTextEditor.KeyDown += ExpandedTextEditorKeyDown;
         _expandedTextEditor.Leave += (_, _) => CommitExpandedTextEditor();
         _segmentGrid.Controls.Add(_expandedTextEditor);
-
-        _segmentGrid.PreviewKeyDown += (_, e) =>
-        {
-            if (_expandedTextEditor.Visible && e.KeyCode == Keys.Enter)
-                e.IsInputKey = true;
-        };
 
         _contextMenu = new ContextMenuStrip();
         _contextMenu.Items.Add("在此之后插入段落", null, OnInsertSegmentAfter);
@@ -362,26 +355,6 @@ public sealed class RichTextEditorForm : Form
         _expandedTextEditor.Visible = false;
     }
 
-    private void ExpandedTextEditorKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Modifiers != Keys.None) return;
-
-        if (e.KeyCode == Keys.Enter)
-        {
-            e.Handled = true;
-            e.SuppressKeyPress = true;
-            CommitExpandedTextEditor();
-            _segmentGrid.Focus();
-        }
-        else if (e.KeyCode == Keys.Escape)
-        {
-            e.Handled = true;
-            e.SuppressKeyPress = true;
-            HideExpandedTextEditor();
-            _segmentGrid.Focus();
-        }
-    }
-
     private static int CalculateExpandedTextEditorRequiredHeight(string text, Font font, int editorWidth)
     {
         var measureText = string.IsNullOrEmpty(text) ? " " : text;
@@ -470,6 +443,32 @@ public sealed class RichTextEditorForm : Form
 
     private static string GridDisplayToText(string display)
         => display.Replace(@"\\\n", "\n");
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (_expandedTextEditor.Visible)
+        {
+            if (keyData == Keys.Enter)
+            {
+                CommitExpandedTextEditor();
+                _segmentGrid.Focus();
+                return true;
+            }
+            if (keyData == Keys.Escape)
+            {
+                HideExpandedTextEditor();
+                _segmentGrid.Focus();
+                return true;
+            }
+            if ((keyData & Keys.Control) == Keys.Control)
+            {
+                var key = keyData & Keys.KeyCode;
+                if (key is Keys.C or Keys.X or Keys.V or Keys.A)
+                    return false;
+            }
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
 
     protected override void OnLoad(EventArgs e)
     {
