@@ -575,21 +575,21 @@ public sealed class RichTextPreviewPanel : Panel
 
                 if (pfc.Families.Length > 0)
                 {
-                    font = new Font(pfc.Families[0], spec.Size, GraphicsUnit.Pixel);
+                    font = new Font(pfc.Families[0], spec.Size, GraphicsUnit.Point);
                 }
                 else
                 {
-                    font = new Font("Microsoft YaHei UI", spec.Size * 0.75f, GraphicsUnit.Pixel);
+                    font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Point);
                 }
             }
             catch
             {
-                font = new Font("Microsoft YaHei UI", spec.Size * 0.75f, GraphicsUnit.Pixel);
+                font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Point);
             }
         }
         else
         {
-            font = new Font("Microsoft YaHei UI", spec.Size * 0.75f, GraphicsUnit.Pixel);
+            font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Point);
         }
 
         _fontCache[key] = font;

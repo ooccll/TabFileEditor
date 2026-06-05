@@ -227,17 +227,17 @@ public sealed class FontSchemePickerForm : Form
                 using var pfc = new PrivateFontCollection();
                 pfc.AddFontFile(spec.FontFile);
                 font = pfc.Families.Length > 0
-                    ? new Font(pfc.Families[0], spec.Size, GraphicsUnit.Pixel)
-                    : new Font("Microsoft YaHei UI", spec.Size * 0.75f, GraphicsUnit.Pixel);
+                    ? new Font(pfc.Families[0], spec.Size, GraphicsUnit.Point)
+                    : new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Point);
             }
             catch
             {
-                font = new Font("Microsoft YaHei UI", spec.Size * 0.75f, GraphicsUnit.Pixel);
+                font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Point);
             }
         }
         else
         {
-            font = new Font("Microsoft YaHei UI", spec.Size * 0.75f, GraphicsUnit.Pixel);
+            font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Point);
         }
 
         using (font)
