@@ -46,6 +46,7 @@ public sealed class MainForm : Form
     private readonly DataGridView _detailGrid = new();
     private readonly TextBox _expandedValueEditorTextBox = new();
     private readonly Button _timeFieldButton = new();
+    private readonly Button _frameSelectButton = new();
     private readonly Button _openTableDirectoryButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _insertRowButton = new();
@@ -568,6 +569,7 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.Leave += (_, _) => CommitExpandedValueEditor();
         _detailGrid.Controls.Add(_expandedValueEditorTextBox);
         ConfigureTimeFieldButton();
+        ConfigureFrameSelectButton();
     }
 
     private static readonly HashSet<string> TimeFieldNames = new(StringComparer.OrdinalIgnoreCase)
@@ -576,6 +578,12 @@ public sealed class MainForm : Form
         "szStartTime",
         "szEndTime",
         "nResTime",
+    };
+
+    private static readonly HashSet<string> FrameSelectFieldNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dwNormalFrame",
+        "dwHighLightFrame",
     };
 
     private void ConfigureTimeFieldButton()
@@ -593,6 +601,23 @@ public sealed class MainForm : Form
         _timeFieldButton.Cursor = Cursors.Hand;
         _timeFieldButton.Click += (_, _) => OpenTimePickerDialog();
         _detailGrid.Controls.Add(_timeFieldButton);
+    }
+
+    private void ConfigureFrameSelectButton()
+    {
+        _frameSelectButton.Text = "选择";
+        _frameSelectButton.Visible = false;
+        _frameSelectButton.FlatStyle = FlatStyle.Flat;
+        _frameSelectButton.BackColor = AccentColor;
+        _frameSelectButton.ForeColor = Color.White;
+        _frameSelectButton.FlatAppearance.BorderColor = AccentColor;
+        _frameSelectButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
+        _frameSelectButton.AutoSize = true;
+        _frameSelectButton.AutoSizeMode = AutoSizeMode.GrowOnly;
+        _frameSelectButton.MinimumSize = new Size(50, DetailGridRowHeight);
+        _frameSelectButton.Cursor = Cursors.Hand;
+        _frameSelectButton.Click += (_, _) => OpenFrameSelectorDialog();
+        _detailGrid.Controls.Add(_frameSelectButton);
     }
 
     private void UpdateTimeFieldButtonVisibility()
@@ -645,6 +670,89 @@ public sealed class MainForm : Form
     private void HideTimeFieldButton()
     {
         _timeFieldButton.Visible = false;
+    }
+
+    private void UpdateFrameSelectButtonVisibility()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            tableColumnIndex < 0 ||
+            tableColumnIndex >= _document.Columns.Count ||
+            !FrameSelectFieldNames.Contains(_document.Columns[tableColumnIndex].Title) ||
+            !IsOperatActFile() ||
+            string.IsNullOrWhiteSpace(GetSzLinkFrameValue()))
+        {
+            HideFrameSelectButton();
+            return;
+        }
+
+        ShowFrameSelectButton(currentCell.RowIndex);
+    }
+
+    private bool IsOperatActFile()
+    {
+        if (_document is null) return false;
+        var fileName = Path.GetFileName(_document.Path);
+        return string.Equals(fileName, "OperatAct.txt", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetSzLinkFrameValue()
+    {
+        if (_document is null || _rowListBox.SelectedItem is not RowListItem selectedItem)
+            return string.Empty;
+
+        var szLinkFrameIndex = FindColumnIndex(_document.Columns, "szLinkFrame");
+        if (szLinkFrameIndex < 0)
+            return string.Empty;
+
+        return TabTableDocument.GetCellValue(selectedItem.Row, szLinkFrameIndex).Trim();
+    }
+
+    private static int FindColumnIndex(IReadOnlyList<TabTableColumn> columns, string title)
+    {
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (string.Equals(columns[i].Title, title, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
+    private void ShowFrameSelectButton(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _detailGrid.Rows.Count)
+        {
+            HideFrameSelectButton();
+            return;
+        }
+
+        _frameSelectButton.Visible = true;
+        _frameSelectButton.BringToFront();
+        UpdateFrameSelectButtonPosition();
+    }
+
+    private void UpdateFrameSelectButtonPosition()
+    {
+        if (!_frameSelectButton.Visible ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0 } currentCell)
+        {
+            return;
+        }
+
+        var valueColumnIndex = _detailGrid.Columns.Count - 1;
+        var cellBounds = GetValueCellDisplayBounds(currentCell.RowIndex, valueColumnIndex);
+        var buttonWidth = _frameSelectButton.Width;
+
+        _frameSelectButton.Location = new Point(
+            cellBounds.Right - buttonWidth,
+            cellBounds.Top);
+    }
+
+    private void HideFrameSelectButton()
+    {
+        _frameSelectButton.Visible = false;
     }
 
     private void OpenTimePickerDialog()
@@ -713,6 +821,122 @@ public sealed class MainForm : Form
             _detailGrid.Rows[currentCell.RowIndex].ErrorText = ex.Message;
             MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void OpenFrameSelectorDialog()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var szLinkFrameValue = GetSzLinkFrameValue();
+        if (string.IsNullOrWhiteSpace(szLinkFrameValue))
+        {
+            MessageBox.Show(this, "当前行的 szLinkFrame 为空，无法选择帧。", "无法选择",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var absolutePath = ResolveFrameAbsolutePath(szLinkFrameValue);
+        if (absolutePath is null)
+        {
+            MessageBox.Show(this, $"无法从表格路径推导出 szLinkFrame 的绝对路径。\n表格路径：{_document.Path}\nszLinkFrame：{szLinkFrameValue}",
+                "路径错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (!File.Exists(absolutePath))
+        {
+            MessageBox.Show(this, $"找不到 UITex 文件：\n{absolutePath}", "文件不存在",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        UitexData uitexData;
+        try
+        {
+            uitexData = UitexParser.Read(absolutePath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"UITex 文件格式错误：\n{absolutePath}\n\n{ex.Message}", "解析失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (!File.Exists(uitexData.TgaFilePath))
+        {
+            MessageBox.Show(this, $"找不到纹理文件：\n{uitexData.TgaFilePath}", "文件不存在",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        Bitmap? atlasImage = null;
+        try
+        {
+            atlasImage = new Bitmap(uitexData.TgaFilePath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"无法加载纹理图片：\n{uitexData.TgaFilePath}\n\n{ex.Message}", "加载失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        using (atlasImage)
+        using (var form = new FrameSelectorForm(uitexData, atlasImage, Path.GetFileName(szLinkFrameValue)))
+        {
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var newValue = form.SelectedFrameIndex.ToString(CultureInfo.InvariantCulture);
+            var oldValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex).Trim();
+            if (newValue == oldValue)
+            {
+                return;
+            }
+
+            try
+            {
+                _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
+                _detailGrid.Rows[currentCell.RowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
+                PushUndoAction(new DetailUndoAction(
+                    selectedItem.Row,
+                    [new DetailUndoCell(currentCell.RowIndex, tableColumnIndex, oldValue)]));
+                _isDirty = true;
+                UpdateActionButtons();
+                RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+                SetStatus("存在未保存修改。");
+            }
+            catch (ArgumentException ex)
+            {
+                _detailGrid.Rows[currentCell.RowIndex].ErrorText = ex.Message;
+                MessageBox.Show(this, ex.Message, "内容无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+    }
+
+    private string? ResolveFrameAbsolutePath(string szLinkFrameValue)
+    {
+        if (_document is null) return null;
+
+        var docPath = _document.Path;
+        var normalizedPath = docPath.Replace('/', '\\');
+
+        const string marker = "client\\ui";
+        var idx = normalizedPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return null;
+
+        var basePath = normalizedPath[..(idx + "client".Length)];
+        var relativePath = szLinkFrameValue.Replace('/', '\\');
+        return Path.GetFullPath(Path.Combine(basePath, relativePath));
     }
 
     private void BuildBottomBar(TableLayoutPanel root)
@@ -1225,6 +1449,11 @@ public sealed class MainForm : Form
         {
             UpdateTimeFieldButtonPosition();
         }
+
+        if (_frameSelectButton.Visible)
+        {
+            UpdateFrameSelectButtonPosition();
+        }
     }
 
     private void DetailGridCellBeginEdit(object? sender, DataGridViewCellCancelEventArgs e)
@@ -1287,6 +1516,7 @@ public sealed class MainForm : Form
         }
 
         UpdateTimeFieldButtonVisibility();
+        UpdateFrameSelectButtonVisibility();
         UpdateDetailCurrentRowHighlight();
     }
 
@@ -1295,6 +1525,11 @@ public sealed class MainForm : Form
         if (_timeFieldButton.Visible)
         {
             UpdateTimeFieldButtonPosition();
+        }
+
+        if (_frameSelectButton.Visible)
+        {
+            UpdateFrameSelectButtonPosition();
         }
     }
 
@@ -1388,6 +1623,7 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.SelectionStart = _expandedValueEditorTextBox.TextLength;
         _expandedValueEditorTextBox.SelectionLength = 0;
         UpdateTimeFieldButtonVisibility();
+        UpdateFrameSelectButtonVisibility();
     }
 
     private Rectangle CalculateExpandedValueEditorBounds(int rowIndex, int columnIndex, string text)
@@ -1496,6 +1732,7 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.Visible = false;
         _expandedValueEditorTextBox.Text = string.Empty;
         HideTimeFieldButton();
+        HideFrameSelectButton();
     }
 
     private bool IsExpandedValueEditorActive()
