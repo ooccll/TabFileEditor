@@ -1,33 +1,25 @@
-using System.ComponentModel;
-using System.Drawing.Text;
-
 namespace TabFileEditor.App;
 
 public sealed class RichTextEditorForm : Form
 {
-    private readonly ElemSchemeLoader _loader;
-    private readonly RichTextDocument _document;
     private readonly RichTextPreviewPanel _previewPanel;
-    private readonly SegmentDataGridView _segmentGrid;
-    private readonly Button _okButton;
-    private readonly Button _cancelButton;
-    private readonly ContextMenuStrip _contextMenu;
-    private readonly SplitContainer _splitContainer;
-    private bool _updatingGrid;
-
-    private readonly ExpandedTextBox _expandedTextEditor = new();
-    private int _expandedTextEditorRowIndex = -1;
-    private bool _committingExpandedTextEditor;
-    private const int ExpandedEditorPadding = 8;
+    private readonly TextBox _markupTextBox = new();
+    private readonly Label _statusLabel = new();
+    private readonly Button _okButton = new();
+    private readonly Button _cancelButton = new();
+    private readonly SplitContainer _splitContainer = new();
+    private RichTextDocument _document;
+    private bool _updatingMarkupText;
 
     public string ResultMarkup { get; private set; } = "";
 
     private static readonly Color WindowBg = Color.FromArgb(0xF6, 0xF8, 0xFB);
     private static readonly Color AccentColor = Color.FromArgb(0x00, 0x7A, 0xCC);
+    private static readonly Color MutedTextColor = Color.FromArgb(0x47, 0x55, 0x69);
+    private static readonly Color ErrorTextColor = Color.FromArgb(0xB9, 0x1C, 0x1C);
 
     public RichTextEditorForm(string markup, ElemSchemeLoader loader)
     {
-        _loader = loader;
         _document = RichTextMarkup.Parse(markup);
 
         Text = "富文本编辑器";
@@ -43,52 +35,89 @@ public sealed class RichTextEditorForm : Form
             Dock = DockStyle.Fill,
             BorderStyle = BorderStyle.FixedSingle,
         };
+        _previewPanel.SetDocument(_document);
+        _previewPanel.DocumentChanged += PreviewPanelDocumentChanged;
 
-        _segmentGrid = new SegmentDataGridView
+        BuildMarkupTextBox();
+        BuildStatusLabel();
+        BuildButtons();
+        BuildLayout();
+
+        UpdateMarkupTextFromDocument();
+        UpdateValidationState(null);
+    }
+
+    private void BuildMarkupTextBox()
+    {
+        _markupTextBox.Name = "MarkupTextBox";
+        _markupTextBox.Dock = DockStyle.Fill;
+        _markupTextBox.Multiline = true;
+        _markupTextBox.AcceptsReturn = true;
+        _markupTextBox.AcceptsTab = true;
+        _markupTextBox.WordWrap = false;
+        _markupTextBox.ScrollBars = ScrollBars.Both;
+        _markupTextBox.BorderStyle = BorderStyle.FixedSingle;
+        _markupTextBox.Font = new Font("Consolas", 10F, FontStyle.Regular);
+        _markupTextBox.TextChanged += MarkupTextBoxTextChanged;
+    }
+
+    private void BuildStatusLabel()
+    {
+        _statusLabel.Dock = DockStyle.Bottom;
+        _statusLabel.Height = 26;
+        _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _statusLabel.ForeColor = MutedTextColor;
+        _statusLabel.BackColor = WindowBg;
+    }
+
+    private void BuildButtons()
+    {
+        _okButton.Text = "确定";
+        _okButton.Size = new Size(80, 34);
+        _okButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        _okButton.BackColor = AccentColor;
+        _okButton.ForeColor = Color.White;
+        _okButton.FlatStyle = FlatStyle.Flat;
+        _okButton.Cursor = Cursors.Hand;
+        _okButton.FlatAppearance.BorderColor = AccentColor;
+        _okButton.Click += OnOkClick;
+
+        _cancelButton.Text = "取消";
+        _cancelButton.Size = new Size(80, 34);
+        _cancelButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        _cancelButton.FlatStyle = FlatStyle.Flat;
+        _cancelButton.Cursor = Cursors.Hand;
+        _cancelButton.Click += (_, _) =>
         {
-            Dock = DockStyle.Fill,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AllowUserToOrderColumns = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            MultiSelect = false,
-            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.DisplayedCellsExceptHeaders,
-            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
-            BackgroundColor = Color.White,
-            RowHeadersVisible = false,
+            DialogResult = DialogResult.Cancel;
+            Close();
         };
 
-        _expandedTextEditor.Name = "ExpandedTextEditorTextBox";
-        _expandedTextEditor.Visible = false;
-        _expandedTextEditor.Multiline = true;
-        _expandedTextEditor.WordWrap = true;
-        _expandedTextEditor.AcceptsReturn = false;
-        _expandedTextEditor.AcceptsTab = false;
-        _expandedTextEditor.BorderStyle = BorderStyle.FixedSingle;
-        _expandedTextEditor.ScrollBars = ScrollBars.Vertical;
-        _expandedTextEditor.Leave += (_, _) =>
-        {
-            if (_committingExpandedTextEditor || _expandedTextEditorRowIndex < 0)
-                return;
-            CommitExpandedTextEditor();
-        };
-        _segmentGrid.Controls.Add(_expandedTextEditor);
-        _segmentGrid.GetExpandedEditor = () => _expandedTextEditor;
+        AcceptButton = _okButton;
+        CancelButton = _cancelButton;
+    }
 
-        _contextMenu = new ContextMenuStrip();
-        _contextMenu.Items.Add("在此之后插入段落", null, OnInsertSegmentAfter);
-        _contextMenu.Items.Add("删除段落", null, OnDeleteSegment);
-        _contextMenu.Items.Add("-");
-        _contextMenu.Items.Add("上移", null, OnMoveSegmentUp);
-        _contextMenu.Items.Add("下移", null, OnMoveSegmentDown);
+    private void BuildLayout()
+    {
+        var previewLabel = BuildSectionLabel("  预览编辑");
+        var markupLabel = BuildSectionLabel("  实际标签");
 
-        _segmentGrid.CellValueChanged += OnSegmentGridCellValueChanged;
-        _segmentGrid.CellClick += OnSegmentGridCellClick;
-        _segmentGrid.CellDoubleClick += OnSegmentGridCellDoubleClick;
-        _segmentGrid.CellContextMenuStripNeeded += (_, e) =>
-        {
-            if (e.RowIndex >= 0) _contextMenu.Show(_segmentGrid, _segmentGrid.PointToClient(Cursor.Position));
-        };
+        _splitContainer.Dock = DockStyle.Fill;
+        _splitContainer.Orientation = Orientation.Horizontal;
+        _splitContainer.BackColor = WindowBg;
+        _splitContainer.SplitterWidth = 6;
+        _splitContainer.Panel1MinSize = 160;
+        _splitContainer.Panel2MinSize = 120;
+
+        _splitContainer.Panel1.Controls.Add(_previewPanel);
+        _splitContainer.Panel1.Controls.Add(previewLabel);
+
+        var markupPanel = new Panel { Dock = DockStyle.Fill, BackColor = WindowBg };
+        markupPanel.Controls.Add(_markupTextBox);
+        markupPanel.Controls.Add(_statusLabel);
+
+        _splitContainer.Panel2.Controls.Add(markupPanel);
+        _splitContainer.Panel2.Controls.Add(markupLabel);
 
         var bottomPanel = new Panel
         {
@@ -96,478 +125,105 @@ public sealed class RichTextEditorForm : Form
             Height = 50,
             BackColor = WindowBg,
         };
-
-        _okButton = new Button
-        {
-            Text = "确定",
-            Size = new Size(80, 34),
-            Location = new Point(ClientSize.Width - 190, 8),
-            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
-            BackColor = AccentColor,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-        };
-        _okButton.FlatAppearance.BorderColor = AccentColor;
-        _okButton.Click += OnOkClick;
-
-        _cancelButton = new Button
-        {
-            Text = "取消",
-            Size = new Size(80, 34),
-            Location = new Point(ClientSize.Width - 96, 8),
-            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-        };
-        _cancelButton.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
-
         bottomPanel.Controls.AddRange([_okButton, _cancelButton]);
 
-        var previewLabel = new Label
-        {
-            Text = "  预览",
-            Dock = DockStyle.Top,
-            Height = 28,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0x47, 0x55, 0x69),
-            BackColor = WindowBg,
-        };
-
-        var segmentLabel = new Label
-        {
-            Text = "  段落列表",
-            Dock = DockStyle.Top,
-            Height = 28,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0x47, 0x55, 0x69),
-            BackColor = WindowBg,
-        };
-
-        _splitContainer = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            BackColor = WindowBg,
-            SplitterWidth = 6,
-            Panel1MinSize = 100,
-            Panel2MinSize = 100,
-        };
-
-        _splitContainer.Panel1.Controls.Add(_previewPanel);
-        _splitContainer.Panel1.Controls.Add(previewLabel);
-        _splitContainer.Panel2.Controls.Add(_segmentGrid);
-        _splitContainer.Panel2.Controls.Add(segmentLabel);
-
-        Controls.Add(bottomPanel);
         Controls.Add(_splitContainer);
-
-        AcceptButton = _okButton;
-        CancelButton = _cancelButton;
-
-        InitSegmentGrid();
-        RefreshPreview();
+        Controls.Add(bottomPanel);
     }
 
-    private void InitSegmentGrid()
+    private static Label BuildSectionLabel(string text)
     {
-        _updatingGrid = true;
-
-        _segmentGrid.Columns.Clear();
-
-        var fontIdCol = new DataGridViewTextBoxColumn
+        return new Label
         {
-            HeaderText = "字体ID",
-            Name = "FontSchemeId",
-            Width = 60,
-            ReadOnly = true,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
+            Text = text,
+            Dock = DockStyle.Top,
+            Height = 28,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+            ForeColor = MutedTextColor,
+            BackColor = WindowBg,
         };
-
-        var fontNameCol = new DataGridViewTextBoxColumn
-        {
-            HeaderText = "字体名称",
-            Name = "FontName",
-            Width = 160,
-            ReadOnly = true,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
-        };
-
-        var textCol = new DataGridViewTextBoxColumn
-        {
-            HeaderText = "文本内容",
-            Name = "Text",
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            ReadOnly = false,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
-        };
-
-        var changeFontCol = new DataGridViewButtonColumn
-        {
-            HeaderText = "",
-            Text = "...",
-            Name = "ChangeFont",
-            Width = 50,
-            UseColumnTextForButtonValue = true,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
-        };
-
-        _segmentGrid.Columns.AddRange([changeFontCol, fontIdCol, fontNameCol, textCol]);
-
-        PopulateGridRows();
-        _updatingGrid = false;
     }
 
-    private void PopulateGridRows()
+    private void PreviewPanelDocumentChanged(object? sender, EventArgs e)
     {
-        HideExpandedTextEditor();
-        _segmentGrid.Rows.Clear();
-        foreach (var seg in _document.Segments)
+        _document = _previewPanel.Document;
+        UpdateMarkupTextFromDocument();
+        UpdateValidationState(null);
+    }
+
+    private void MarkupTextBoxTextChanged(object? sender, EventArgs e)
+    {
+        if (_updatingMarkupText) return;
+
+        if (!RichTextMarkup.TryParse(_markupTextBox.Text, out var parsedDocument, out var error))
         {
-            var scheme = _loader.FontSchemes.GetValueOrDefault(seg.FontSchemeId);
-            var row = new DataGridViewRow();
-            row.CreateCells(_segmentGrid,
-                "",
-                seg.FontSchemeId,
-                scheme?.Name ?? "",
-                TextToGridDisplay(seg.Text));
-            _segmentGrid.Rows.Add(row);
-        }
-    }
-
-    private void RefreshPreview()
-    {
-        _previewPanel.SetSegments(_document.Segments);
-    }
-
-    private void OnSegmentGridCellValueChanged(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (_updatingGrid || e.RowIndex < 0) return;
-        if (_segmentGrid.Columns[e.ColumnIndex].Name != "Text") return;
-
-        var rawText = _segmentGrid.Rows[e.RowIndex].Cells["Text"].Value?.ToString() ?? "";
-        var newText = GridDisplayToText(rawText);
-        if (e.RowIndex < _document.Segments.Count)
-        {
-            _document.Segments[e.RowIndex] = _document.Segments[e.RowIndex] with { Text = newText };
-            RefreshPreview();
-        }
-    }
-
-    private void OnSegmentGridCellClick(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (e.RowIndex < 0) return;
-        if (_segmentGrid.Columns[e.ColumnIndex].Name != "ChangeFont") return;
-
-        var currentFontId = _document.Segments[e.RowIndex].FontSchemeId;
-        using var picker = new FontSchemePickerForm(_loader, currentFontId);
-        if (picker.ShowDialog(this) != DialogResult.OK) return;
-
-        var newFontId = picker.SelectedFontSchemeId;
-        _document.Segments[e.RowIndex] = _document.Segments[e.RowIndex] with { FontSchemeId = newFontId };
-
-        _updatingGrid = true;
-        var scheme = _loader.FontSchemes.GetValueOrDefault(newFontId);
-        _segmentGrid.Rows[e.RowIndex].Cells["FontSchemeId"].Value = newFontId;
-        _segmentGrid.Rows[e.RowIndex].Cells["FontName"].Value = scheme?.Name ?? "";
-        _updatingGrid = false;
-
-        RefreshPreview();
-    }
-
-    private void OnSegmentGridCellDoubleClick(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (e.RowIndex < 0) return;
-        if (_segmentGrid.Columns[e.ColumnIndex].Name != "Text") return;
-
-        if (!CommitExpandedTextEditor()) return;
-        ShowExpandedTextEditor(e.RowIndex);
-    }
-
-    private void ShowExpandedTextEditor(int rowIndex)
-    {
-        if (rowIndex < 0 || rowIndex >= _segmentGrid.Rows.Count) return;
-
-        _expandedTextEditorRowIndex = rowIndex;
-
-        var text = _segmentGrid.Rows[rowIndex].Cells["Text"].Value?.ToString() ?? "";
-
-        var cellBounds = _segmentGrid.GetCellDisplayRectangle(
-            _segmentGrid.Columns["Text"]!.Index, rowIndex, false);
-        if (cellBounds.Width <= 0 || cellBounds.Height <= 0)
-        {
-            HideExpandedTextEditor();
+            UpdateValidationState(error);
             return;
         }
 
-        var requiredHeight = CalculateExpandedTextEditorRequiredHeight(
-            text, _segmentGrid.Font, cellBounds.Width);
-        var availableHeight = Math.Max(
-            cellBounds.Height,
-            _segmentGrid.ClientSize.Height - cellBounds.Top - 2);
-        var height = Math.Clamp(requiredHeight, cellBounds.Height, availableHeight);
-
-        _expandedTextEditor.Font = _segmentGrid.Font;
-        _expandedTextEditor.Text = text;
-        _expandedTextEditor.Bounds = new Rectangle(cellBounds.Left, cellBounds.Top, cellBounds.Width, height);
-        _expandedTextEditor.Visible = true;
-        _expandedTextEditor.BringToFront();
-        _expandedTextEditor.Focus();
-        _expandedTextEditor.SelectionStart = _expandedTextEditor.Text.Length;
-        _expandedTextEditor.SelectionLength = 0;
+        _document = parsedDocument;
+        _previewPanel.SetDocument(_document);
+        UpdateValidationState(null);
     }
 
-    private bool CommitExpandedTextEditor()
+    private void UpdateMarkupTextFromDocument()
     {
-        if (_expandedTextEditorRowIndex < 0) return true;
-        if (_committingExpandedTextEditor) return true;
+        var markup = RichTextMarkup.Serialize(_document);
+        if (_markupTextBox.Text == markup) return;
 
-        _committingExpandedTextEditor = true;
+        _updatingMarkupText = true;
         try
         {
-            var rowIndex = _expandedTextEditorRowIndex;
-            if (rowIndex < 0 || rowIndex >= _segmentGrid.Rows.Count ||
-                rowIndex >= _document.Segments.Count)
-            {
-                HideExpandedTextEditor();
-                return true;
-            }
-
-            var newText = GridDisplayToText(_expandedTextEditor.Text);
-            if (_document.Segments[rowIndex].Text == newText)
-            {
-                HideExpandedTextEditor();
-                return true;
-            }
-
-            _document.Segments[rowIndex] = _document.Segments[rowIndex] with { Text = newText };
-
-            _updatingGrid = true;
-            _segmentGrid.Rows[rowIndex].Cells["Text"].Value = TextToGridDisplay(newText);
-            _updatingGrid = false;
-
-            RefreshPreview();
-            HideExpandedTextEditor();
-            return true;
+            _markupTextBox.Text = markup;
         }
         finally
         {
-            _committingExpandedTextEditor = false;
+            _updatingMarkupText = false;
         }
     }
 
-    private void HideExpandedTextEditor()
+    private void UpdateValidationState(string? error)
     {
-        _expandedTextEditorRowIndex = -1;
-        _expandedTextEditor.Visible = false;
-    }
-
-    private static int CalculateExpandedTextEditorRequiredHeight(string text, Font font, int editorWidth)
-    {
-        var measureText = string.IsNullOrEmpty(text) ? " " : text;
-        var measureWidth = Math.Max(1, editorWidth - ExpandedEditorPadding);
-        var measured = TextRenderer.MeasureText(
-            measureText,
-            font,
-            new Size(measureWidth, 10000),
-            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
-        return Math.Max(30, measured.Height + ExpandedEditorPadding);
-    }
-
-    private void OnInsertSegmentAfter(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        var idx = row.Index;
-        var fontId = idx < _document.Segments.Count ? _document.Segments[idx].FontSchemeId : 18;
-        var newSeg = new RichTextSegment("", fontId);
-        _document.Segments.Insert(idx + 1, newSeg);
-
-        _updatingGrid = true;
-        PopulateGridRows();
-        _updatingGrid = false;
-        RefreshPreview();
-    }
-
-    private void OnDeleteSegment(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        if (_document.Segments.Count <= 1) return;
-        var idx = row.Index;
-        if (idx >= 0 && idx < _document.Segments.Count)
-        {
-            _document.Segments.RemoveAt(idx);
-            _updatingGrid = true;
-            PopulateGridRows();
-            _updatingGrid = false;
-            RefreshPreview();
-        }
-    }
-
-    private void OnMoveSegmentUp(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        var idx = row.Index;
-        if (idx <= 0) return;
-
-        (_document.Segments[idx - 1], _document.Segments[idx]) =
-            (_document.Segments[idx], _document.Segments[idx - 1]);
-
-        _updatingGrid = true;
-        PopulateGridRows();
-        _segmentGrid.ClearSelection();
-        _segmentGrid.Rows[idx - 1].Selected = true;
-        _updatingGrid = false;
-        RefreshPreview();
-    }
-
-    private void OnMoveSegmentDown(object? sender, EventArgs e)
-    {
-        if (_segmentGrid.CurrentRow is not { } row) return;
-        var idx = row.Index;
-        if (idx >= _document.Segments.Count - 1) return;
-
-        (_document.Segments[idx], _document.Segments[idx + 1]) =
-            (_document.Segments[idx + 1], _document.Segments[idx]);
-
-        _updatingGrid = true;
-        PopulateGridRows();
-        _segmentGrid.ClearSelection();
-        _segmentGrid.Rows[idx + 1].Selected = true;
-        _updatingGrid = false;
-        RefreshPreview();
+        var valid = string.IsNullOrWhiteSpace(error);
+        _okButton.Enabled = valid;
+        _statusLabel.ForeColor = valid ? MutedTextColor : ErrorTextColor;
+        _statusLabel.Text = valid
+            ? "标签已同步。可在预览里编辑，也可直接修改完整标签。"
+            : error;
     }
 
     private void OnOkClick(object? sender, EventArgs e)
     {
-        CommitExpandedTextEditor();
-        ResultMarkup = RichTextMarkup.Serialize(_document);
+        if (!RichTextMarkup.TryParse(_markupTextBox.Text, out var parsedDocument, out var error))
+        {
+            UpdateValidationState(error);
+            return;
+        }
+
+        ResultMarkup = RichTextMarkup.Serialize(parsedDocument);
         DialogResult = DialogResult.OK;
         Close();
-    }
-
-    private static string TextToGridDisplay(string text)
-        => text.Replace("\n", @"\\\n");
-
-    private static string GridDisplayToText(string display)
-        => display.Replace(@"\\\n", "\n");
-
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-    {
-        if (_expandedTextEditor.Visible)
-        {
-            if (keyData == Keys.Enter)
-            {
-                CommitExpandedTextEditor();
-                _segmentGrid.Focus();
-                return true;
-            }
-            if (keyData == Keys.Escape)
-            {
-                HideExpandedTextEditor();
-                _segmentGrid.Focus();
-                return true;
-            }
-        }
-        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        _splitContainer.SplitterDistance = _splitContainer.Height / 2;
-        PerformLayout();
-        _okButton.Location = new Point(ClientSize.Width - 190, 8);
-        _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        _splitContainer.SplitterDistance = Math.Max(160, _splitContainer.Height * 2 / 3);
+        PositionButtons();
     }
 
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
-        if (_okButton is not null)
-            _okButton.Location = new Point(ClientSize.Width - 190, 8);
-        if (_cancelButton is not null)
-            _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        PositionButtons();
     }
 
-    protected override void OnFormClosed(FormClosedEventArgs e)
+    private void PositionButtons()
     {
-        _previewPanel.Dispose();
-        base.OnFormClosed(e);
-    }
+        if (_okButton.Parent is null || _cancelButton.Parent is null) return;
 
-    // TextBox subclass that accepts navigation keys as input keys.
-    // The default TextBox.IsInputKey returns false for arrow keys, which causes
-    // WinForms to route them through ProcessDialogKey instead of dispatching
-    // WM_KEYDOWN to the native EDIT control. Since the TextBox is a child of
-    // DataGridView, the DataGridView's ProcessDialogKey intercepts these keys
-    // for cell navigation. By overriding IsInputKey to return true, the keys
-    // are dispatched directly to the TextBox, where the native EDIT control
-    // handles cursor movement.
-    private class ExpandedTextBox : TextBox
-    {
-        protected override bool IsInputKey(Keys keyData)
-        {
-            if (ExpandedTextEditorKeyRouting.IsNavigationKey(keyData))
-            {
-                return true;
-            }
-            return base.IsInputKey(keyData);
-        }
-    }
-
-    private class SegmentDataGridView : DataGridView
-    {
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Func<TextBox?>? GetExpandedEditor { get; set; }
-
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-        {
-            var editor = GetExpandedEditor?.Invoke();
-            if (editor is { Visible: true })
-            {
-                var key = keyData & Keys.KeyCode;
-                if ((keyData & Keys.Control) == Keys.Control)
-                {
-                    if (key == Keys.C)
-                    {
-                        if (!string.IsNullOrEmpty(editor.SelectedText))
-                            Clipboard.SetText(editor.SelectedText);
-                        return true;
-                    }
-                    if (key == Keys.X)
-                    {
-                        if (!string.IsNullOrEmpty(editor.SelectedText))
-                        {
-                            Clipboard.SetText(editor.SelectedText);
-                            editor.SelectedText = "";
-                        }
-                        return true;
-                    }
-                    if (key == Keys.V) { editor.Paste(); return true; }
-                    if (key == Keys.A) { editor.SelectAll(); return true; }
-                }
-                // Route navigation keys to the overlay editor instead of moving the grid cell.
-                if (ExpandedTextEditorKeyRouting.RouteNavigationKeyToEditor(editor, keyData))
-                {
-                    return true;
-                }
-            }
-            return base.ProcessCmdKey(ref msg, keyData);
-        }
-
-        protected override bool ProcessDialogKey(Keys keyData)
-        {
-            var editor = GetExpandedEditor?.Invoke();
-            if (editor is { Visible: true })
-            {
-                if (ExpandedTextEditorKeyRouting.RouteNavigationKeyToEditor(editor, keyData))
-                {
-                    return true;
-                }
-            }
-            return base.ProcessDialogKey(keyData);
-        }
+        _okButton.Location = new Point(ClientSize.Width - 190, 8);
+        _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
     }
 }
