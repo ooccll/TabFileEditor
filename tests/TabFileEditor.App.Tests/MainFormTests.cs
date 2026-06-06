@@ -809,6 +809,7 @@ public sealed class MainFormTests : IDisposable
             form.ClientSize = new Size(1000, 620);
             form.CreateControl();
             form.Show();
+            Application.DoEvents();
             InvokePrivate(form, "InitializeSplitterDistance");
             form.PerformLayout();
             FindFilePathTextBox(form).Text = tablePath;
@@ -842,6 +843,60 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DetailGridExpandedValueEditorTreatsNavigationKeysAsTextInput()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            Application.DoEvents();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+
+            var editBox = FindExpandedValueEditorTextBox(form);
+            Assert.True(editBox.Visible);
+
+            // ExpandedTextBox.IsInputKey should return true for navigation keys
+            var isInputKeyMethod = editBox.GetType().GetMethod(
+                "IsInputKey",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(isInputKeyMethod);
+            Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Left })!);
+            Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Control | Keys.Right })!);
+            Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Shift | Keys.Down })!);
+
+            // DetailDataGridView.ProcessDialogKey should return false for navigation keys
+            var processDialogKeyMethod = detailGrid.GetType().GetMethod(
+                "ProcessDialogKey",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(processDialogKeyMethod);
+            Assert.False((bool)processDialogKeyMethod.Invoke(detailGrid, new object[] { Keys.Left })!);
+
+            // DetailDataGridView.ProcessCmdKey should return false for navigation keys
+            var processCmdKeyMethod = detailGrid.GetType().GetMethod(
+                "ProcessCmdKey",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(processCmdKeyMethod);
+            Assert.False((bool)processCmdKeyMethod.Invoke(detailGrid, new object[] { new Message(), Keys.Control | Keys.Right })!);
+        });
+    }
+
+    [Fact]
     public void DetailGridCurrentCellChangeCommitsActiveExpandedEditor()
     {
         RunOnStaThread(() =>
@@ -851,6 +906,7 @@ public sealed class MainFormTests : IDisposable
             form.ClientSize = new Size(1000, 620);
             form.CreateControl();
             form.Show();
+            Application.DoEvents();
             InvokePrivate(form, "InitializeSplitterDistance");
             form.PerformLayout();
             FindFilePathTextBox(form).Text = tablePath;
@@ -891,6 +947,7 @@ public sealed class MainFormTests : IDisposable
             form.ClientSize = new Size(1000, 620);
             form.CreateControl();
             form.Show();
+            Application.DoEvents();
             InvokePrivate(form, "InitializeSplitterDistance");
             form.PerformLayout();
             FindFilePathTextBox(form).Text = tablePath;

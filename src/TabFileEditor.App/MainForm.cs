@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -43,8 +44,8 @@ public sealed class MainForm : Form
     private readonly SplitContainer _splitContainer = new();
     private readonly TextBox _rowSearchTextBox = new();
     private readonly ListBox _rowListBox = new();
-    private readonly DataGridView _detailGrid = new();
-    private readonly TextBox _expandedValueEditorTextBox = new();
+    private readonly DetailDataGridView _detailGrid = new();
+    private readonly ExpandedTextBox _expandedValueEditorTextBox = new();
     private readonly Button _timeFieldButton = new();
     private readonly Button _frameSelectButton = new();
     private readonly Button _richTextButton = new();
@@ -69,7 +70,6 @@ public sealed class MainForm : Form
     private bool _splitterInitialized;
     private bool _committingExpandedValueEditor;
     private bool _handlingDetailCurrentCellChanged;
-    private bool _pendingExpandedValueEditorCurrentCellCommit;
     private int _expandedValueEditorRowIndex = -1;
     private int _expandedValueEditorColumnIndex = -1;
     private int _displayColumnIndex;
@@ -567,8 +567,14 @@ public sealed class MainForm : Form
         _expandedValueEditorTextBox.ForeColor = TextColor;
         _expandedValueEditorTextBox.ScrollBars = ScrollBars.None;
         _expandedValueEditorTextBox.KeyDown += ExpandedValueEditorTextBoxKeyDown;
-        _expandedValueEditorTextBox.Leave += (_, _) => CommitExpandedValueEditor();
+        _expandedValueEditorTextBox.Leave += (_, _) =>
+        {
+            if (_handlingDetailCurrentCellChanged || _committingExpandedValueEditor || !IsExpandedValueEditorActive())
+                return;
+            CommitExpandedValueEditor();
+        };
         _detailGrid.Controls.Add(_expandedValueEditorTextBox);
+        _detailGrid.GetExpandedEditor = () => _expandedValueEditorTextBox;
         ConfigureTimeFieldButton();
         ConfigureFrameSelectButton();
         ConfigureRichTextButton();
@@ -1670,16 +1676,14 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (!_pendingExpandedValueEditorCurrentCellCommit &&
-            IsExpandedValueEditorActive() &&
+        if (IsExpandedValueEditorActive() &&
             _detailGrid.CurrentCell is { } currentCell &&
             (currentCell.RowIndex != _expandedValueEditorRowIndex ||
              currentCell.ColumnIndex != _expandedValueEditorColumnIndex))
         {
             var editorRowIndex = _expandedValueEditorRowIndex;
             var editorColumnIndex = _expandedValueEditorColumnIndex;
-            _pendingExpandedValueEditorCurrentCellCommit = true;
-            BeginInvoke(() => CommitExpandedValueEditorAfterCurrentCellChanged(editorRowIndex, editorColumnIndex));
+            CommitExpandedValueEditorAfterCurrentCellChanged(editorRowIndex, editorColumnIndex);
         }
 
         UpdateTimeFieldButtonVisibility();
@@ -1708,7 +1712,6 @@ public sealed class MainForm : Form
 
     private void CommitExpandedValueEditorAfterCurrentCellChanged(int editorRowIndex, int editorColumnIndex)
     {
-        _pendingExpandedValueEditorCurrentCellCommit = false;
         if (!IsExpandedValueEditorActive() ||
             _expandedValueEditorRowIndex != editorRowIndex ||
             _expandedValueEditorColumnIndex != editorColumnIndex ||
@@ -1724,7 +1727,12 @@ public sealed class MainForm : Form
         {
             if (!CommitExpandedValueEditor())
             {
-                RestoreDetailCurrentCell(editorRowIndex, editorColumnIndex);
+                // Defer restore to avoid SetCurrentCellAddressCore re-entrancy
+                BeginInvoke(() =>
+                {
+                    RestoreDetailCurrentCell(editorRowIndex, editorColumnIndex);
+                    UpdateDetailCurrentRowHighlight();
+                });
             }
             else
             {
@@ -1886,7 +1894,10 @@ public sealed class MainForm : Form
             _isDirty = true;
             HideExpandedValueEditor();
             UpdateActionButtons();
-            RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+            if (!_handlingDetailCurrentCellChanged)
+            {
+                RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+            }
             SetStatus("存在未保存修改。");
             return true;
         }
@@ -1938,6 +1949,7 @@ public sealed class MainForm : Form
     {
         if (_loadingDetails ||
             _committingExpandedValueEditor ||
+            _handlingDetailCurrentCellChanged ||
             _document is null ||
             e.RowIndex < 0 ||
             e.ColumnIndex < 0 ||
@@ -2878,5 +2890,76 @@ public sealed class MainForm : Form
         if (!File.Exists(settings.LastOpenedFilePath)) return;
         _filePathTextBox.Text = settings.LastOpenedFilePath;
         LoadCurrentFile();
+    }
+
+    private class ExpandedTextBox : TextBox
+    {
+        protected override bool IsInputKey(Keys keyData)
+        {
+            var key = keyData & Keys.KeyCode;
+            if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
+                or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+            {
+                return true;
+            }
+            return base.IsInputKey(keyData);
+        }
+    }
+
+    private class DetailDataGridView : DataGridView
+    {
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Func<TextBox?>? GetExpandedEditor { get; set; }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            var editor = GetExpandedEditor?.Invoke();
+            if (editor is { Visible: true })
+            {
+                var key = keyData & Keys.KeyCode;
+                if ((keyData & Keys.Control) == Keys.Control)
+                {
+                    if (key == Keys.C)
+                    {
+                        if (!string.IsNullOrEmpty(editor.SelectedText))
+                            Clipboard.SetText(editor.SelectedText);
+                        return true;
+                    }
+                    if (key == Keys.X)
+                    {
+                        if (!string.IsNullOrEmpty(editor.SelectedText))
+                        {
+                            Clipboard.SetText(editor.SelectedText);
+                            editor.SelectedText = "";
+                        }
+                        return true;
+                    }
+                    if (key == Keys.V) { editor.Paste(); return true; }
+                    if (key == Keys.A) { editor.SelectAll(); return true; }
+                }
+                // Do not let DataGridView handle navigation keys when the editor is visible.
+                if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
+                    or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+                {
+                    return false;
+                }
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            var editor = GetExpandedEditor?.Invoke();
+            if (editor is { Visible: true })
+            {
+                var key = keyData & Keys.KeyCode;
+                if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
+                    or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+                {
+                    return false;
+                }
+            }
+            return base.ProcessDialogKey(keyData);
+        }
     }
 }

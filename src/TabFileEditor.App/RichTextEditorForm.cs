@@ -15,7 +15,7 @@ public sealed class RichTextEditorForm : Form
     private readonly SplitContainer _splitContainer;
     private bool _updatingGrid;
 
-    private readonly TextBox _expandedTextEditor = new();
+    private readonly ExpandedTextBox _expandedTextEditor = new();
     private int _expandedTextEditorRowIndex = -1;
     private bool _committingExpandedTextEditor;
     private const int ExpandedEditorPadding = 8;
@@ -58,6 +58,7 @@ public sealed class RichTextEditorForm : Form
             RowHeadersVisible = false,
         };
 
+        _expandedTextEditor.Name = "ExpandedTextEditorTextBox";
         _expandedTextEditor.Visible = false;
         _expandedTextEditor.Multiline = true;
         _expandedTextEditor.WordWrap = true;
@@ -65,7 +66,12 @@ public sealed class RichTextEditorForm : Form
         _expandedTextEditor.AcceptsTab = false;
         _expandedTextEditor.BorderStyle = BorderStyle.FixedSingle;
         _expandedTextEditor.ScrollBars = ScrollBars.Vertical;
-        _expandedTextEditor.Leave += (_, _) => CommitExpandedTextEditor();
+        _expandedTextEditor.Leave += (_, _) =>
+        {
+            if (_committingExpandedTextEditor || _expandedTextEditorRowIndex < 0)
+                return;
+            CommitExpandedTextEditor();
+        };
         _segmentGrid.Controls.Add(_expandedTextEditor);
         _segmentGrid.GetExpandedEditor = () => _expandedTextEditor;
 
@@ -310,6 +316,7 @@ public sealed class RichTextEditorForm : Form
         _expandedTextEditor.BringToFront();
         _expandedTextEditor.Focus();
         _expandedTextEditor.SelectionStart = _expandedTextEditor.Text.Length;
+        _expandedTextEditor.SelectionLength = 0;
     }
 
     private bool CommitExpandedTextEditor()
@@ -490,6 +497,28 @@ public sealed class RichTextEditorForm : Form
         base.OnFormClosed(e);
     }
 
+    // TextBox subclass that accepts navigation keys as input keys.
+    // The default TextBox.IsInputKey returns false for arrow keys, which causes
+    // WinForms to route them through ProcessDialogKey instead of dispatching
+    // WM_KEYDOWN to the native EDIT control. Since the TextBox is a child of
+    // DataGridView, the DataGridView's ProcessDialogKey intercepts these keys
+    // for cell navigation. By overriding IsInputKey to return true, the keys
+    // are dispatched directly to the TextBox, where the native EDIT control
+    // handles cursor movement.
+    private class ExpandedTextBox : TextBox
+    {
+        protected override bool IsInputKey(Keys keyData)
+        {
+            var key = keyData & Keys.KeyCode;
+            if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
+                or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+            {
+                return true;
+            }
+            return base.IsInputKey(keyData);
+        }
+    }
+
     private class SegmentDataGridView : DataGridView
     {
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -498,28 +527,54 @@ public sealed class RichTextEditorForm : Form
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             var editor = GetExpandedEditor?.Invoke();
-            if (editor is { Visible: true } && (keyData & Keys.Control) == Keys.Control)
+            if (editor is { Visible: true })
             {
                 var key = keyData & Keys.KeyCode;
-                if (key == Keys.C)
+                if ((keyData & Keys.Control) == Keys.Control)
                 {
-                    if (!string.IsNullOrEmpty(editor.SelectedText))
-                        Clipboard.SetText(editor.SelectedText);
-                    return true;
-                }
-                if (key == Keys.X)
-                {
-                    if (!string.IsNullOrEmpty(editor.SelectedText))
+                    if (key == Keys.C)
                     {
-                        Clipboard.SetText(editor.SelectedText);
-                        editor.SelectedText = "";
+                        if (!string.IsNullOrEmpty(editor.SelectedText))
+                            Clipboard.SetText(editor.SelectedText);
+                        return true;
                     }
-                    return true;
+                    if (key == Keys.X)
+                    {
+                        if (!string.IsNullOrEmpty(editor.SelectedText))
+                        {
+                            Clipboard.SetText(editor.SelectedText);
+                            editor.SelectedText = "";
+                        }
+                        return true;
+                    }
+                    if (key == Keys.V) { editor.Paste(); return true; }
+                    if (key == Keys.A) { editor.SelectAll(); return true; }
                 }
-                if (key == Keys.V) { editor.Paste(); return true; }
-                if (key == Keys.A) { editor.SelectAll(); return true; }
+                // Do not let DataGridView handle navigation keys when the editor is visible.
+                // The ExpandedTextBox overrides IsInputKey to accept these, so they will be
+                // dispatched directly to the TextBox as WM_KEYDOWN.
+                if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
+                    or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+                {
+                    return false;
+                }
             }
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            var editor = GetExpandedEditor?.Invoke();
+            if (editor is { Visible: true })
+            {
+                var key = keyData & Keys.KeyCode;
+                if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
+                    or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+                {
+                    return false;
+                }
+            }
+            return base.ProcessDialogKey(keyData);
         }
     }
 }
