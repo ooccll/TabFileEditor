@@ -509,9 +509,7 @@ public sealed class RichTextEditorForm : Form
     {
         protected override bool IsInputKey(Keys keyData)
         {
-            var key = keyData & Keys.KeyCode;
-            if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
-                or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+            if (ExpandedTextEditorKeyRouting.IsNavigationKey(keyData))
             {
                 return true;
             }
@@ -550,13 +548,10 @@ public sealed class RichTextEditorForm : Form
                     if (key == Keys.V) { editor.Paste(); return true; }
                     if (key == Keys.A) { editor.SelectAll(); return true; }
                 }
-                // Do not let DataGridView handle navigation keys when the editor is visible.
-                // The ExpandedTextBox overrides IsInputKey to accept these, so they will be
-                // dispatched directly to the TextBox as WM_KEYDOWN.
-                if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
-                    or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+                // Route navigation keys to the overlay editor instead of moving the grid cell.
+                if (ExpandedTextEditorKeyRouting.RouteNavigationKeyToEditor(editor, keyData))
                 {
-                    return false;
+                    return true;
                 }
             }
             return base.ProcessCmdKey(ref msg, keyData);
@@ -567,11 +562,9 @@ public sealed class RichTextEditorForm : Form
             var editor = GetExpandedEditor?.Invoke();
             if (editor is { Visible: true })
             {
-                var key = keyData & Keys.KeyCode;
-                if (key is Keys.Left or Keys.Right or Keys.Up or Keys.Down
-                    or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown)
+                if (ExpandedTextEditorKeyRouting.RouteNavigationKeyToEditor(editor, keyData))
                 {
-                    return false;
+                    return true;
                 }
             }
             return base.ProcessDialogKey(keyData);

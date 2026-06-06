@@ -68,19 +68,78 @@ public sealed class RichTextEditorFormTests : IDisposable
             Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Control | Keys.Right })!);
             Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Shift | Keys.Down })!);
 
-            // SegmentDataGridView.ProcessDialogKey should return false for navigation keys
+            // SegmentDataGridView.ProcessDialogKey should route navigation keys to the expanded editor
             var processDialogKeyMethod = grid.GetType().GetMethod(
                 "ProcessDialogKey",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(processDialogKeyMethod);
-            Assert.False((bool)processDialogKeyMethod.Invoke(grid, new object[] { Keys.Left })!);
+            Assert.True((bool)processDialogKeyMethod.Invoke(grid, new object[] { Keys.Left })!);
 
-            // SegmentDataGridView.ProcessCmdKey should return false for navigation keys
+            // SegmentDataGridView.ProcessCmdKey should route navigation keys to the expanded editor
             var processCmdKeyMethod = grid.GetType().GetMethod(
                 "ProcessCmdKey",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(processCmdKeyMethod);
-            Assert.False((bool)processCmdKeyMethod.Invoke(grid, new object[] { new Message(), Keys.Control | Keys.Right })!);
+            Assert.True((bool)processCmdKeyMethod.Invoke(grid, new object[] { new Message(), Keys.Control | Keys.Right })!);
+        });
+    }
+
+    [Fact]
+    public void ExpandedTextEditorMovesCaretWhenGridReceivesArrowKey()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = CreateForm();
+            form.Show();
+            Application.DoEvents();
+
+            var grid = FindSegmentGrid(form);
+            var textColumnIndex = grid.Columns["Text"]!.Index;
+            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
+                new DataGridViewCellEventArgs(textColumnIndex, 0));
+
+            var editBox = FindExpandedTextEditor(form);
+            editBox.Text = "abc";
+            editBox.SelectionStart = 1;
+            editBox.SelectionLength = 0;
+            grid.CurrentCell = grid.Rows[0].Cells[textColumnIndex];
+            Assert.True(editBox.Visible);
+
+            var handled = InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Right);
+
+            Assert.True(handled);
+            Assert.Same(grid.Rows[0].Cells[textColumnIndex], grid.CurrentCell);
+            Assert.Equal(2, editBox.SelectionStart);
+            Assert.Equal(0, editBox.SelectionLength);
+        });
+    }
+
+    [Fact]
+    public void ExpandedTextEditorSupportsCtrlAndShiftNavigationWhenGridReceivesKeys()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = CreateForm();
+            form.Show();
+            Application.DoEvents();
+
+            var grid = FindSegmentGrid(form);
+            var textColumnIndex = grid.Columns["Text"]!.Index;
+            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
+                new DataGridViewCellEventArgs(textColumnIndex, 0));
+
+            var editBox = FindExpandedTextEditor(form);
+            editBox.Text = "abc def";
+            editBox.SelectionStart = 0;
+            editBox.SelectionLength = 0;
+
+            Assert.True(InvokeProtected<bool>(grid, "ProcessCmdKey", new Message(), Keys.Control | Keys.Right));
+            Assert.Equal(4, editBox.SelectionStart);
+            Assert.Equal(0, editBox.SelectionLength);
+
+            Assert.True(InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Shift | Keys.Right));
+            Assert.Equal(4, editBox.SelectionStart);
+            Assert.Equal(1, editBox.SelectionLength);
         });
     }
 
@@ -131,6 +190,15 @@ public sealed class RichTextEditorFormTests : IDisposable
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
         method.Invoke(target, args);
+    }
+
+    private static T InvokeProtected<T>(object target, string methodName, params object[] args)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsAssignableFrom<T>(method.Invoke(target, args));
     }
 
     private static void RunOnStaThread(Action action)

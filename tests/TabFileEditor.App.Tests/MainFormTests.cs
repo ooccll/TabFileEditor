@@ -880,19 +880,103 @@ public sealed class MainFormTests : IDisposable
             Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Control | Keys.Right })!);
             Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Shift | Keys.Down })!);
 
-            // DetailDataGridView.ProcessDialogKey should return false for navigation keys
+            // DetailDataGridView.ProcessDialogKey should route navigation keys to the expanded editor
             var processDialogKeyMethod = detailGrid.GetType().GetMethod(
                 "ProcessDialogKey",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(processDialogKeyMethod);
-            Assert.False((bool)processDialogKeyMethod.Invoke(detailGrid, new object[] { Keys.Left })!);
+            Assert.True((bool)processDialogKeyMethod.Invoke(detailGrid, new object[] { Keys.Left })!);
 
-            // DetailDataGridView.ProcessCmdKey should return false for navigation keys
+            // DetailDataGridView.ProcessCmdKey should route navigation keys to the expanded editor
             var processCmdKeyMethod = detailGrid.GetType().GetMethod(
                 "ProcessCmdKey",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(processCmdKeyMethod);
-            Assert.False((bool)processCmdKeyMethod.Invoke(detailGrid, new object[] { new Message(), Keys.Control | Keys.Right })!);
+            Assert.True((bool)processCmdKeyMethod.Invoke(detailGrid, new object[] { new Message(), Keys.Control | Keys.Right })!);
+        });
+    }
+
+    [Fact]
+    public void DetailGridExpandedValueEditorMovesCaretWhenGridReceivesArrowKey()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            Application.DoEvents();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            var editedCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            detailGrid.CurrentCell = editedCell;
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "abc";
+            editBox.SelectionStart = 1;
+            editBox.SelectionLength = 0;
+            Assert.True(editBox.Visible);
+
+            var handled = InvokeProtected<bool>(detailGrid, "ProcessDialogKey", Keys.Right);
+
+            Assert.True(handled);
+            Assert.Equal(2, detailGrid.CurrentCell.RowIndex);
+            Assert.Equal(valueColumnIndex, detailGrid.CurrentCell.ColumnIndex);
+            Assert.Equal(2, editBox.SelectionStart);
+            Assert.Equal(0, editBox.SelectionLength);
+        });
+    }
+
+    [Fact]
+    public void DetailGridExpandedValueEditorSupportsCtrlAndShiftNavigationWhenGridReceivesKeys()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            Application.DoEvents();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Text = "abc def";
+            editBox.SelectionStart = 0;
+            editBox.SelectionLength = 0;
+
+            Assert.True(InvokeProtected<bool>(detailGrid, "ProcessCmdKey", new Message(), Keys.Control | Keys.Right));
+            Assert.Equal(4, editBox.SelectionStart);
+            Assert.Equal(0, editBox.SelectionLength);
+
+            Assert.True(InvokeProtected<bool>(detailGrid, "ProcessDialogKey", Keys.Shift | Keys.Right));
+            Assert.Equal(4, editBox.SelectionStart);
+            Assert.Equal(1, editBox.SelectionLength);
         });
     }
 
@@ -1477,6 +1561,15 @@ public sealed class MainFormTests : IDisposable
     }
 
     private static T InvokePrivate<T>(object target, string methodName, params object[] args)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsAssignableFrom<T>(method.Invoke(target, args));
+    }
+
+    private static T InvokeProtected<T>(object target, string methodName, params object[] args)
     {
         var method = target.GetType().GetMethod(
             methodName,
