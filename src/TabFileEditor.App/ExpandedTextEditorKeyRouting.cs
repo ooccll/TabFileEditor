@@ -1,8 +1,16 @@
+using System.Runtime.InteropServices;
+
 namespace TabFileEditor.App;
 
 internal static class ExpandedTextEditorKeyRouting
 {
     private static readonly Dictionary<TextBox, int> ShiftSelectionAnchors = new();
+    private static readonly Dictionary<TextBox, VerticalNavigationState> VerticalNavigationStates = new();
+
+    private const int EmGetLineCount = 0x00BA;
+    private const int EmLineIndex = 0x00BB;
+    private const int EmLineLength = 0x00C1;
+    private const int EmLineFromChar = 0x00C9;
 
     public static bool IsNavigationKey(Keys keyData)
     {
@@ -39,6 +47,11 @@ internal static class ExpandedTextEditorKeyRouting
             ShiftSelectionAnchors.Remove(editor);
             editor.SelectionStart = target;
             editor.SelectionLength = 0;
+        }
+
+        if (key is not (Keys.Up or Keys.Down))
+        {
+            VerticalNavigationStates.Remove(editor);
         }
 
         return true;
@@ -152,27 +165,44 @@ internal static class ExpandedTextEditorKeyRouting
 
     private static int FindVerticalTarget(TextBox editor, int caret, int lineOffset)
     {
-        var line = editor.GetLineFromCharIndex(Math.Clamp(caret, 0, editor.TextLength));
-        var currentLineStart = editor.GetFirstCharIndexFromLine(line);
-        if (currentLineStart < 0)
+        caret = Math.Clamp(caret, 0, editor.TextLength);
+        var currentLine = (int)SendMessage(editor.Handle, EmLineFromChar, caret, 0);
+        var currentLineStart = GetLineIndex(editor, currentLine);
+        if (currentLine < 0 || currentLineStart < 0)
         {
-            return Math.Clamp(caret, 0, editor.TextLength);
+            return caret;
         }
 
-        var targetLine = Math.Clamp(line + lineOffset, 0, Math.Max(0, editor.Lines.Length - 1));
-        if (targetLine == line)
+        var desiredColumn = caret - currentLineStart;
+        if (VerticalNavigationStates.TryGetValue(editor, out var state) &&
+            state.LastCaret == caret)
         {
-            return Math.Clamp(caret, 0, editor.TextLength);
+            desiredColumn = state.DesiredColumn;
         }
 
-        var column = caret - currentLineStart;
-        var targetLineStart = editor.GetFirstCharIndexFromLine(targetLine);
+        var lineCount = (int)SendMessage(editor.Handle, EmGetLineCount, 0, 0);
+        var targetLine = Math.Clamp(currentLine + lineOffset, 0, Math.Max(0, lineCount - 1));
+        if (targetLine == currentLine)
+        {
+            return caret;
+        }
+
+        var targetLineStart = GetLineIndex(editor, targetLine);
         if (targetLineStart < 0)
         {
-            return Math.Clamp(caret, 0, editor.TextLength);
+            return lineOffset < 0 ? 0 : editor.TextLength;
         }
 
-        return Math.Min(targetLineStart + column, GetLineEnd(editor, targetLine, targetLineStart));
+        var targetLineLength = (int)SendMessage(editor.Handle, EmLineLength, targetLineStart, 0);
+        var target = targetLineStart + Math.Min(desiredColumn, Math.Max(0, targetLineLength));
+        target = Math.Clamp(target, 0, editor.TextLength);
+        VerticalNavigationStates[editor] = new VerticalNavigationState(desiredColumn, target);
+        return target;
+    }
+
+    private static int GetLineIndex(TextBox editor, int line)
+    {
+        return (int)SendMessage(editor.Handle, EmLineIndex, line, 0);
     }
 
     private static int GetCurrentLineStart(TextBox editor, int caret)
@@ -208,4 +238,9 @@ internal static class ExpandedTextEditorKeyRouting
         editor.SelectionStart = Math.Min(anchor, target);
         editor.SelectionLength = Math.Abs(anchor - target);
     }
+
+    [DllImport("user32.dll")]
+    private static extern nint SendMessage(nint hWnd, int msg, nint wParam, nint lParam);
+
+    private sealed record VerticalNavigationState(int DesiredColumn, int LastCaret);
 }

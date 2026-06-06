@@ -144,6 +144,37 @@ public sealed class RichTextEditorFormTests : IDisposable
     }
 
     [Fact]
+    public void ExpandedTextEditorMovesAcrossWrappedVisualLinesWhenGridReceivesDownKey()
+    {
+        RunOnStaThread(() =>
+        {
+            using var form = CreateForm();
+            form.Show();
+            Application.DoEvents();
+
+            var grid = FindSegmentGrid(form);
+            var textColumnIndex = grid.Columns["Text"]!.Index;
+            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
+                new DataGridViewCellEventArgs(textColumnIndex, 0));
+
+            var editBox = FindExpandedTextEditor(form);
+            editBox.Width = 90;
+            editBox.Text = "alpha beta gamma delta epsilon zeta eta theta iota kappa";
+            editBox.SelectionStart = 0;
+            editBox.SelectionLength = 0;
+            Assert.Single(editBox.Lines);
+
+            Assert.True(InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Down));
+            var afterFirstDown = editBox.SelectionStart;
+            Assert.True(afterFirstDown > 0);
+
+            Assert.True(InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Down));
+
+            Assert.True(editBox.SelectionStart > afterFirstDown);
+        });
+    }
+
+    [Fact]
     public void DoubleClickingNonTextColumnDoesNotStartExpandedEditor()
     {
         RunOnStaThread(() =>

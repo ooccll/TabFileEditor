@@ -981,6 +981,49 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DetailGridExpandedValueEditorMovesAcrossWrappedVisualLinesWhenGridReceivesDownKey()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            Application.DoEvents();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            detailGrid.CurrentCell = detailGrid.Rows[2].Cells[valueColumnIndex];
+            InvokePrivate(
+                form,
+                "DetailGridCellBeginEdit",
+                detailGrid,
+                new DataGridViewCellCancelEventArgs(valueColumnIndex, 2));
+
+            var editBox = FindExpandedValueEditorTextBox(form);
+            editBox.Width = 90;
+            editBox.Text = "alpha beta gamma delta epsilon zeta eta theta iota kappa";
+            editBox.SelectionStart = 0;
+            editBox.SelectionLength = 0;
+            Assert.Single(editBox.Lines);
+
+            Assert.True(InvokeProtected<bool>(detailGrid, "ProcessDialogKey", Keys.Down));
+            var afterFirstDown = editBox.SelectionStart;
+            Assert.True(afterFirstDown > 0);
+
+            Assert.True(InvokeProtected<bool>(detailGrid, "ProcessDialogKey", Keys.Down));
+
+            Assert.True(editBox.SelectionStart > afterFirstDown);
+        });
+    }
+
+    [Fact]
     public void DetailGridCurrentCellChangeCommitsActiveExpandedEditor()
     {
         RunOnStaThread(() =>
