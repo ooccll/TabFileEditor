@@ -240,7 +240,7 @@ public sealed class ElemSchemeLoader
                     {
                         Id = id,
                         File = !string.IsNullOrEmpty(file) ? file : existing.File,
-                        Size = size ?? existing.Size,
+                        Size = existing.Size > 0 ? existing.Size : (size ?? existing.Size),
                         Dpi = dpi ?? existing.Dpi,
                         Vertical = vertical ?? existing.Vertical,
                     };

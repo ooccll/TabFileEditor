@@ -51,4 +51,36 @@ public sealed class ElemSchemeLoaderTests : IDisposable
 
         Assert.Equal(Path.Combine(fontDir, "gamefont.ttf"), spec.FontFile);
     }
+
+    [Fact]
+    public void ResolveFontKeepsBaseFontSizeWhenZhCnOverridesSize()
+    {
+        var uiRoot = Path.Combine(_tempDir, "client", "ui");
+        var elemDir = Path.Combine(uiRoot, "Scheme", "Elem");
+        Directory.CreateDirectory(elemDir);
+
+        File.WriteAllText(Path.Combine(elemDir, "Font.ini"), """
+            [276]
+            FontID=3
+            Size=0
+            """);
+        File.WriteAllText(Path.Combine(elemDir, "fontlist.ini"), """
+            [3]
+            File=\UI\Font\base.ttf
+            Size=14
+            Dpi=86
+            """);
+        File.WriteAllText(Path.Combine(elemDir, "fontlist.ini.zh_CN"), """
+            [3]
+            File=\UI\Font\zh.ttf
+            Size=17
+            Dpi=86
+            """);
+
+        var loader = new ElemSchemeLoader(elemDir);
+
+        var spec = loader.ResolveFont(276);
+
+        Assert.Equal(14, spec.Size);
+    }
 }
