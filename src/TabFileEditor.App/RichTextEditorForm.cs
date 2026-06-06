@@ -501,8 +501,21 @@ public sealed class RichTextEditorForm : Form
             if (editor is { Visible: true } && (keyData & Keys.Control) == Keys.Control)
             {
                 var key = keyData & Keys.KeyCode;
-                if (key == Keys.C) { editor.Copy(); return true; }
-                if (key == Keys.X) { editor.Cut(); return true; }
+                if (key == Keys.C)
+                {
+                    if (!string.IsNullOrEmpty(editor.SelectedText))
+                        Clipboard.SetText(editor.SelectedText);
+                    return true;
+                }
+                if (key == Keys.X)
+                {
+                    if (!string.IsNullOrEmpty(editor.SelectedText))
+                    {
+                        Clipboard.SetText(editor.SelectedText);
+                        editor.SelectedText = "";
+                    }
+                    return true;
+                }
                 if (key == Keys.V) { editor.Paste(); return true; }
                 if (key == Keys.A) { editor.SelectAll(); return true; }
             }
