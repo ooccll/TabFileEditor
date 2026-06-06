@@ -1386,6 +1386,44 @@ public sealed class MainFormTests : IDisposable
         });
     }
 
+    [Fact]
+    public void DoubleClickingActivityExplainHidesRichTextSettingButton()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateRichTextActivityTable();
+            using var form = new MainForm();
+            form.ClientSize = new Size(1000, 620);
+            form.CreateControl();
+            form.Show();
+            Application.DoEvents();
+            InvokePrivate(form, "InitializeSplitterDistance");
+            form.PerformLayout();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+            form.PerformLayout();
+
+            var detailGrid = FindDetailGrid(form);
+            var valueColumnIndex = detailGrid.Columns["Value"]!.Index;
+            const int activityExplainRowIndex = 2;
+            Assert.Equal("szActivityExplain", detailGrid.Rows[activityExplainRowIndex].Cells[0].Value);
+            detailGrid.CurrentCell = detailGrid.Rows[activityExplainRowIndex].Cells[valueColumnIndex];
+            Application.DoEvents();
+            InvokePrivate(form, "UpdateRichTextButtonVisibility");
+
+            Assert.Single(FindDescendants<Button>(form), button => button.Text == "设置" && button.Visible);
+
+            InvokePrivate(
+                form,
+                "DetailGridCellDoubleClick",
+                detailGrid,
+                new DataGridViewCellEventArgs(valueColumnIndex, activityExplainRowIndex));
+
+            Assert.True(FindExpandedValueEditorTextBox(form).Visible);
+            Assert.DoesNotContain(FindDescendants<Button>(form), button => button.Text == "设置" && button.Visible);
+        });
+    }
+
     private string CreateSampleTable()
     {
         var path = Path.Combine(_tempDir, "QuestTab.xls");
@@ -1435,6 +1473,19 @@ public sealed class MainFormTests : IDisposable
             "ID\tQuestName\tDesc",
             "int\tstring\tstring",
             $"1\tFirstQuest\t{longDescription}",
+        };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateRichTextActivityTable()
+    {
+        var path = Path.Combine(_tempDir, "RichTextActivityTab.xls");
+        var lines = new[]
+        {
+            "ID\tQuestName\tszActivityExplain",
+            "int\tstring\tstring",
+            "1\tFirstQuest\t活动说明内容",
         };
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;

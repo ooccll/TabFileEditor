@@ -795,7 +795,8 @@ public sealed class MainForm : Form
 
     private void UpdateRichTextButtonVisibility()
     {
-        if (_document is null ||
+        if (IsExpandedValueEditorActive() ||
+            _document is null ||
             _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
             _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
             _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
