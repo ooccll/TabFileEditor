@@ -153,6 +153,13 @@ public sealed class RichTextPreviewPanel : Panel
         e.Handled = true;
     }
 
+    protected override bool IsInputKey(Keys keyData)
+    {
+        var keyCode = keyData & Keys.KeyCode;
+        return keyCode is Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.Home or Keys.End
+            || base.IsInputKey(keyData);
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);

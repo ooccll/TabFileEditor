@@ -45,6 +45,25 @@ public sealed class RichTextPreviewPanelTests : IDisposable
     }
 
     [Fact]
+    public void PreviewPanelTreatsNavigationKeysAsInputKeys()
+    {
+        using var panel = new RichTextPreviewPanel(CreateLoader());
+        panel.CreateControl();
+
+        var method = typeof(RichTextPreviewPanel).GetMethod(
+            "IsInputKey",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Assert.True((bool)method.Invoke(panel, [Keys.Up])!);
+        Assert.True((bool)method.Invoke(panel, [Keys.Down])!);
+        Assert.True((bool)method.Invoke(panel, [Keys.Left])!);
+        Assert.True((bool)method.Invoke(panel, [Keys.Right])!);
+        Assert.True((bool)method.Invoke(panel, [Keys.Home])!);
+        Assert.True((bool)method.Invoke(panel, [Keys.End])!);
+    }
+
+    [Fact]
     public void DownArrowMovesCaretToNextVisualLineClosestToCurrentX()
     {
         RunOnStaThread(() =>
