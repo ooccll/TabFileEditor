@@ -444,7 +444,9 @@ public sealed class RichTextPreviewPanel : Panel
 
                 var charText = ch.ToString();
                 var width = MeasureCharacterWidth(g, charText, font);
-                if (x + width + CharSpacing > PaddingPx + maxWidth && x > PaddingPx)
+                if (x + width + CharSpacing > PaddingPx + maxWidth
+                    && x > PaddingPx
+                    && !IsForbiddenLineStartSymbol(ch))
                 {
                     x = PaddingPx;
                     y += lineHeight + LineSpacing;
@@ -478,6 +480,9 @@ public sealed class RichTextPreviewPanel : Panel
 
     private static float GetHalfWidthSpaceWidth(Font font)
         => Math.Max(4f, font.Size * 0.25f);
+
+    private static bool IsForbiddenLineStartSymbol(char ch)
+        => "，。；：！？、）】》」』〕〉…,.;:!?)]}>\u00B7-~/%".Contains(ch);
 
     private Font GetFont(ResolvedFontSpec spec)
     {

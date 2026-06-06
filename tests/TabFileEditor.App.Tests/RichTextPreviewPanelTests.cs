@@ -120,6 +120,49 @@ public sealed class RichTextPreviewPanelTests : IDisposable
     }
 
     [Fact]
+    public void AutoWrapKeepsForbiddenLineStartSymbolOnPreviousLine()
+    {
+        var text = "侠士侠士，后续";
+        using var panel = CreatePanelWithText(text);
+        var commaOffset = text.IndexOf('，');
+        SetClientWidthToWrapBeforeOffset(panel, commaOffset);
+
+        var items = GetLayoutItems(panel);
+        var previousItem = GetItemByOffset(items, commaOffset - 1);
+        var commaItem = GetItemByOffset(items, commaOffset);
+
+        Assert.Equal(GetItemY(previousItem), GetItemY(commaItem));
+    }
+
+    [Fact]
+    public void AutoWrapStillMovesTextCharacterToNextLine()
+    {
+        var text = "侠士侠士后续";
+        using var panel = CreatePanelWithText(text);
+        var wrapOffset = text.IndexOf('后');
+        SetClientWidthToWrapBeforeOffset(panel, wrapOffset);
+
+        var items = GetLayoutItems(panel);
+        var previousItem = GetItemByOffset(items, wrapOffset - 1);
+        var wrappedItem = GetItemByOffset(items, wrapOffset);
+
+        Assert.True(GetItemY(wrappedItem) > GetItemY(previousItem));
+    }
+
+    [Fact]
+    public void ExplicitNewlineCanStillPlaceSymbolAtLineStart()
+    {
+        var text = "侠士\n，后续";
+        using var panel = CreatePanelWithText(text);
+
+        var items = GetLayoutItems(panel);
+        var firstItem = GetItemByOffset(items, 0);
+        var commaItem = GetItemByOffset(items, text.IndexOf('，'));
+
+        Assert.True(GetItemY(commaItem) > GetItemY(firstItem));
+    }
+
+    [Fact]
     public void DownArrowMovesCaretToNextVisualLineClosestToCurrentX()
     {
         RunOnStaThread(() =>
@@ -302,8 +345,47 @@ public sealed class RichTextPreviewPanelTests : IDisposable
         return list.Cast<object>().ToList();
     }
 
+    private static IReadOnlyList<object> GetLayoutItems(RichTextPreviewPanel panel)
+    {
+        var layoutMethod = typeof(RichTextPreviewPanel).GetMethod(
+            "LayoutDocument", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(layoutMethod);
+        using var g = panel.CreateGraphics();
+        var layout = layoutMethod.Invoke(panel, [g])!;
+
+        var itemsProp = layout.GetType().GetProperty("Items");
+        Assert.NotNull(itemsProp);
+        var list = itemsProp.GetValue(layout) as System.Collections.IEnumerable;
+        Assert.NotNull(list);
+        return list.Cast<object>().ToList();
+    }
+
     private static float GetCaretX(object caretItem)
         => (float)caretItem.GetType().GetProperty("X")!.GetValue(caretItem)!;
+
+    private static object GetItemByOffset(IReadOnlyList<object> items, int offset)
+        => items.Single(item => GetItemOffset(item) == offset);
+
+    private static int GetItemOffset(object item)
+        => (int)item.GetType().GetProperty("Offset")!.GetValue(item)!;
+
+    private static float GetItemY(object item)
+        => GetItemBounds(item).Y;
+
+    private static RectangleF GetItemBounds(object item)
+        => (RectangleF)item.GetType().GetProperty("Bounds")!.GetValue(item)!;
+
+    private static void SetClientWidthToWrapBeforeOffset(RichTextPreviewPanel panel, int offset)
+    {
+        var items = GetLayoutItems(panel);
+        var previousBounds = GetItemBounds(GetItemByOffset(items, offset - 1));
+        var currentBounds = GetItemBounds(GetItemByOffset(items, offset));
+        var padding = GetItemBounds(items[0]).X;
+        var rightEdgeBeforeCurrent = previousBounds.Right
+            + Math.Max(1f, (currentBounds.Right - previousBounds.Right) / 2f);
+
+        panel.ClientSize = new Size((int)Math.Ceiling(rightEdgeBeforeCurrent + padding), panel.ClientSize.Height);
+    }
 
     private static Font InvokeGetFont(RichTextPreviewPanel panel, ResolvedFontSpec spec)
     {
