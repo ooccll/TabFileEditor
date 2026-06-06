@@ -30,7 +30,9 @@ public sealed class RichTextEditorFormTests : IDisposable
             Application.DoEvents();
 
             Assert.Single(FindDescendants<RichTextPreviewPanel>(form));
-            Assert.Single(FindDescendants<TextBox>(form), textBox => textBox.Name == "MarkupTextBox");
+            var markupTextBox = Assert.Single(FindDescendants<TextBox>(form), textBox => textBox.Name == "MarkupTextBox");
+            Assert.True(markupTextBox.WordWrap);
+            Assert.Equal(ScrollBars.Vertical, markupTextBox.ScrollBars);
             Assert.Empty(FindDescendants<DataGridView>(form));
         });
     }

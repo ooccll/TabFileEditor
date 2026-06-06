@@ -54,8 +54,8 @@ public sealed class RichTextEditorForm : Form
         _markupTextBox.Multiline = true;
         _markupTextBox.AcceptsReturn = true;
         _markupTextBox.AcceptsTab = true;
-        _markupTextBox.WordWrap = false;
-        _markupTextBox.ScrollBars = ScrollBars.Both;
+        _markupTextBox.WordWrap = true;
+        _markupTextBox.ScrollBars = ScrollBars.Vertical;
         _markupTextBox.BorderStyle = BorderStyle.FixedSingle;
         _markupTextBox.Font = new Font("Consolas", 10F, FontStyle.Regular);
         _markupTextBox.TextChanged += MarkupTextBoxTextChanged;
