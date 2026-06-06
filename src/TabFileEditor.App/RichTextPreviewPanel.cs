@@ -15,7 +15,7 @@ public sealed class RichTextPreviewPanel : Panel
 
     private const int PaddingPx = 12;
     private const int LineSpacing = 4;
-    private const int CharSpacing = -3;
+    private const int CharSpacing = -4;
 
     public event EventHandler? DocumentChanged;
 
