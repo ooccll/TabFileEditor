@@ -23,7 +23,7 @@ public sealed class RichTextEditorForm : Form
         _document = RichTextMarkup.Parse(markup);
 
         Text = "富文本编辑器";
-        Size = new Size(1100, 900);
+        Size = new Size(780, 900);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
