@@ -1271,15 +1271,13 @@ public sealed class MainForm : Form
         }
 
         var targetRow = selectedItem.Row;
-        if (!string.IsNullOrEmpty(_rowSearchTextBox.Text))
+        if (string.IsNullOrEmpty(_rowSearchTextBox.Text))
         {
-            _preferredRowAfterSearchClear = targetRow;
-            _rowSearchTextBox.Clear();
+            return;
         }
-        else
-        {
-            RenderRows(selectFirstWhenAvailable: true, preferredRow: targetRow);
-        }
+
+        _preferredRowAfterSearchClear = targetRow;
+        _rowSearchTextBox.Clear();
     }
 
     private void RenderRows(bool selectFirstWhenAvailable, TabTableRow? preferredRow = null)

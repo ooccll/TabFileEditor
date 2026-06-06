@@ -251,6 +251,36 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DoubleClickingRowWhenSearchIsEmptyDoesNothing()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSearchNavigationTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var rowSearchTextBox = FindRowSearchTextBox(form);
+            Assert.Equal(string.Empty, rowSearchTextBox.Text);
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            rowListBox.SelectedIndex = 5;
+            var selectedIndexBefore = rowListBox.SelectedIndex;
+            var topIndexBefore = rowListBox.TopIndex;
+            var itemCountBefore = rowListBox.Items.Count;
+
+            InvokePrivate(form, "RowListBoxMouseDoubleClick");
+
+            Assert.Equal(string.Empty, rowSearchTextBox.Text);
+            Assert.Equal(selectedIndexBefore, rowListBox.SelectedIndex);
+            Assert.Equal(topIndexBefore, rowListBox.TopIndex);
+            Assert.Equal(itemCountBefore, rowListBox.Items.Count);
+        });
+    }
+
+    [Fact]
     public void DetailGridReportsSearchMatchRangesOnlyForValueColumn()
     {
         RunOnStaThread(() =>
