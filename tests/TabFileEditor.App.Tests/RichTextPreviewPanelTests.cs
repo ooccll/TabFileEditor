@@ -64,6 +64,37 @@ public sealed class RichTextPreviewPanelTests : IDisposable
     }
 
     [Fact]
+    public void PreviewPanelUsesGameLikeDarkGreenBackground()
+    {
+        using var panel = new RichTextPreviewPanel(CreateLoader());
+
+        Assert.Equal(Color.FromArgb(0x18, 0x32, 0x2A), panel.BackColor);
+    }
+
+    [Fact]
+    public void SpaceAdvanceDoesNotIncludeExtraPreviewPadding()
+    {
+        using var panel = CreatePanelWithText("A B");
+        var caretPositions = GetCaretPositions(panel);
+        var spaceAdvance = GetCaretX(caretPositions[2]) - GetCaretX(caretPositions[1]);
+        using var graphics = panel.CreateGraphics();
+        var font = InvokeGetFont(panel, new ResolvedFontSpec { Size = 16 });
+        var expectedSpaceAdvance = Math.Max(
+            4f,
+            graphics.MeasureString(" ", font, PointF.Empty, StringFormat.GenericTypographic).Width);
+
+        Assert.InRange(spaceAdvance, expectedSpaceAdvance - 0.5f, expectedSpaceAdvance + 0.5f);
+    }
+
+    [Fact]
+    public void LayoutCreatesCaretPositionForEachTextOffset()
+    {
+        using var panel = CreatePanelWithText("侠士可在 A B");
+
+        Assert.Equal(panel.Document.TextLength + 1, GetCaretPositions(panel).Count);
+    }
+
+    [Fact]
     public void DownArrowMovesCaretToNextVisualLineClosestToCurrentX()
     {
         RunOnStaThread(() =>
@@ -174,6 +205,18 @@ public sealed class RichTextPreviewPanelTests : IDisposable
         panel.SetDocument(new RichTextDocument(
         [
             new RichTextSegment("0123456789\nABCDEFGHIJ", 0),
+        ]));
+        return panel;
+    }
+
+    private RichTextPreviewPanel CreatePanelWithText(string text)
+    {
+        var panel = new RichTextPreviewPanel(CreateLoader());
+        panel.Size = new System.Drawing.Size(400, 300);
+        panel.CreateControl();
+        panel.SetDocument(new RichTextDocument(
+        [
+            new RichTextSegment(text, 0),
         ]));
         return panel;
     }

@@ -16,8 +16,7 @@ public sealed class RichTextPreviewPanel : Panel
 
     private const int PaddingPx = 12;
     private const int LineSpacing = 4;
-    private const int CharSpacing = -4;
-    private const int SpaceExtraWidth = 8;
+    private const int CharSpacing = 0;
 
     public event EventHandler? DocumentChanged;
 
@@ -27,7 +26,7 @@ public sealed class RichTextPreviewPanel : Panel
     {
         _loader = loader;
         DoubleBuffered = true;
-        BackColor = Color.FromArgb(0x1A, 0x1A, 0x2E);
+        BackColor = Color.FromArgb(0x18, 0x32, 0x2A);
         AutoScroll = true;
         TabStop = true;
         Cursor = Cursors.IBeam;
@@ -444,12 +443,8 @@ public sealed class RichTextPreviewPanel : Panel
                 }
 
                 var charText = ch.ToString();
-                var width = Math.Max(4f, g.MeasureString(charText, font).Width);
-                if (ch == ' ')
-                    width += SpaceExtraWidth;
-
-                var advanceSpacing = ch == ' ' ? 0 : CharSpacing;
-                if (x + width + advanceSpacing > PaddingPx + maxWidth && x > PaddingPx)
+                var width = MeasureCharacterWidth(g, charText, font);
+                if (x + width + CharSpacing > PaddingPx + maxWidth && x > PaddingPx)
                 {
                     x = PaddingPx;
                     y += lineHeight + LineSpacing;
@@ -459,7 +454,7 @@ public sealed class RichTextPreviewPanel : Panel
 
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, charText, bounds, font, spec));
-                x += width + advanceSpacing;
+                x += width + CharSpacing;
                 lineHeight = Math.Max(lineHeight, font.Height);
                 offset++;
             }
@@ -467,6 +462,12 @@ public sealed class RichTextPreviewPanel : Panel
 
         caretPositions.Add(new CaretLayoutItem(x, y, lineHeight));
         return new LayoutResult(items, caretPositions, y + lineHeight);
+    }
+
+    private static float MeasureCharacterWidth(Graphics g, string text, Font font)
+    {
+        var measured = g.MeasureString(text, font, PointF.Empty, StringFormat.GenericTypographic);
+        return Math.Max(4f, measured.Width);
     }
 
     private Font GetFont(ResolvedFontSpec spec)
