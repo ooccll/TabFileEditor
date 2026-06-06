@@ -73,6 +73,7 @@ public sealed class MainForm : Form
     private int _expandedValueEditorRowIndex = -1;
     private int _expandedValueEditorColumnIndex = -1;
     private int _displayColumnIndex;
+    private TabTableRow? _preferredRowAfterSearchClear;
     private Action<ProcessStartInfo> _startProcess = processStartInfo => Process.Start(processStartInfo);
 
     public MainForm()
@@ -244,6 +245,7 @@ public sealed class MainForm : Form
             RenderSelectedRow();
             UpdateActionButtons();
         };
+        _rowListBox.MouseDoubleClick += (_, _) => RowListBoxMouseDoubleClick();
         rowListPanel.Controls.Add(_rowListBox, 0, 1);
 
         var insertItem = new ToolStripMenuItem("在下方插入");
@@ -1255,8 +1257,29 @@ public sealed class MainForm : Form
 
     private void RowSearchTextBoxTextChanged()
     {
-        RenderRows(selectFirstWhenAvailable: true);
+        var preferredRow = _preferredRowAfterSearchClear;
+        _preferredRowAfterSearchClear = null;
+        RenderRows(selectFirstWhenAvailable: true, preferredRow: preferredRow);
         _detailGrid.Invalidate();
+    }
+
+    private void RowListBoxMouseDoubleClick()
+    {
+        if (_rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var targetRow = selectedItem.Row;
+        if (!string.IsNullOrEmpty(_rowSearchTextBox.Text))
+        {
+            _preferredRowAfterSearchClear = targetRow;
+            _rowSearchTextBox.Clear();
+        }
+        else
+        {
+            RenderRows(selectFirstWhenAvailable: true, preferredRow: targetRow);
+        }
     }
 
     private void RenderRows(bool selectFirstWhenAvailable, TabTableRow? preferredRow = null)
@@ -1299,6 +1322,7 @@ public sealed class MainForm : Form
             if (preferredIndex >= 0)
             {
                 _rowListBox.SelectedIndex = preferredIndex;
+                _rowListBox.TopIndex = preferredIndex;
             }
             else if (selectFirstWhenAvailable && _rowListBox.Items.Count > 0)
             {

@@ -217,6 +217,40 @@ public sealed class MainFormTests : IDisposable
     }
 
     [Fact]
+    public void DoubleClickingSearchResultClearsSearchAndSelectsOriginalRow()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSearchNavigationTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var rowSearchTextBox = FindRowSearchTextBox(form);
+            rowSearchTextBox.Text = "UniqueTarget";
+
+            var rowListBox = FindDescendant<ListBox>(form);
+            Assert.NotNull(rowListBox);
+            var item = Assert.Single(rowListBox.Items.Cast<object>());
+            Assert.Equal("[12] Quest12", item.ToString());
+            rowListBox.SelectedIndex = 0;
+
+            InvokePrivate(form, "RowListBoxMouseDoubleClick");
+
+            Assert.Equal(string.Empty, rowSearchTextBox.Text);
+            Assert.Equal(12, rowListBox.Items.Count);
+            Assert.Equal(11, rowListBox.SelectedIndex);
+            Assert.Equal(11, rowListBox.TopIndex);
+            Assert.Equal("[12] Quest12", rowListBox.SelectedItem!.ToString());
+
+            var detailGrid = FindDetailGrid(form);
+            Assert.Equal("Quest12", detailGrid.Rows[1].Cells["Value"].Value);
+            Assert.Equal("UniqueTarget", detailGrid.Rows[2].Cells["Value"].Value);
+        });
+    }
+
+    [Fact]
     public void DetailGridReportsSearchMatchRangesOnlyForValueColumn()
     {
         RunOnStaThread(() =>
@@ -1487,6 +1521,24 @@ public sealed class MainFormTests : IDisposable
             "int\tstring\tstring",
             "1\tFirstQuest\t活动说明内容",
         };
+        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
+        return path;
+    }
+
+    private string CreateSearchNavigationTable()
+    {
+        var path = Path.Combine(_tempDir, "SearchNavigationTab.xls");
+        var lines = new List<string>
+        {
+            "ID\tQuestName\tDesc",
+            "int\tstring\tstring",
+        };
+        for (var i = 1; i <= 12; i++)
+        {
+            var desc = i == 12 ? "UniqueTarget" : $"普通描述{i}";
+            lines.Add($"{i}\tQuest{i:D2}\t{desc}");
+        }
+
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", GbkEncoding);
         return path;
     }
