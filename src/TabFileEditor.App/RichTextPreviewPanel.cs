@@ -12,6 +12,7 @@ public sealed class RichTextPreviewPanel : Panel
     private int _caretOffset;
     private int _selectionAnchor;
     private bool _draggingSelection;
+    private float? _verticalCaretTargetX;
 
     private const int PaddingPx = 12;
     private const int LineSpacing = 4;
@@ -53,6 +54,7 @@ public sealed class RichTextPreviewPanel : Panel
     {
         _caretOffset = Math.Clamp(offset, 0, Document.TextLength);
         _selectionAnchor = _caretOffset;
+        _verticalCaretTargetX = null;
         Invalidate();
     }
 
@@ -65,6 +67,7 @@ public sealed class RichTextPreviewPanel : Panel
         Document.InsertText(_caretOffset, text, fontSchemeId);
         _caretOffset += text.Length;
         _selectionAnchor = _caretOffset;
+        _verticalCaretTargetX = null;
         RaiseDocumentChanged();
     }
 
@@ -115,6 +118,7 @@ public sealed class RichTextPreviewPanel : Panel
             var offset = HitTest(e.Location);
             _caretOffset = offset;
             _selectionAnchor = offset;
+            _verticalCaretTargetX = null;
             _draggingSelection = true;
             Invalidate();
         }
@@ -130,6 +134,7 @@ public sealed class RichTextPreviewPanel : Panel
         if (!_draggingSelection) return;
 
         _caretOffset = HitTest(e.Location);
+        _verticalCaretTargetX = null;
         Invalidate();
     }
 
@@ -158,6 +163,7 @@ public sealed class RichTextPreviewPanel : Panel
             {
                 _selectionAnchor = 0;
                 _caretOffset = Document.TextLength;
+                _verticalCaretTargetX = null;
                 Invalidate();
                 e.SuppressKeyPress = true;
                 return;
@@ -172,6 +178,7 @@ public sealed class RichTextPreviewPanel : Panel
             {
                 CopySelection();
                 DeleteSelection();
+                _verticalCaretTargetX = null;
                 RaiseDocumentChanged();
                 e.SuppressKeyPress = true;
                 return;
@@ -211,18 +218,30 @@ public sealed class RichTextPreviewPanel : Panel
                 break;
             case Keys.Left:
                 MoveCaret(-1, e.Shift);
+                _verticalCaretTargetX = null;
                 e.SuppressKeyPress = true;
                 break;
             case Keys.Right:
                 MoveCaret(1, e.Shift);
+                _verticalCaretTargetX = null;
+                e.SuppressKeyPress = true;
+                break;
+            case Keys.Up:
+                MoveCaretVertically(-1, e.Shift);
+                e.SuppressKeyPress = true;
+                break;
+            case Keys.Down:
+                MoveCaretVertically(1, e.Shift);
                 e.SuppressKeyPress = true;
                 break;
             case Keys.Home:
                 MoveCaretTo(0, e.Shift);
+                _verticalCaretTargetX = null;
                 e.SuppressKeyPress = true;
                 break;
             case Keys.End:
                 MoveCaretTo(Document.TextLength, e.Shift);
+                _verticalCaretTargetX = null;
                 e.SuppressKeyPress = true;
                 break;
         }
@@ -236,6 +255,7 @@ public sealed class RichTextPreviewPanel : Panel
     {
         if (DeleteSelection())
         {
+            _verticalCaretTargetX = null;
             RaiseDocumentChanged();
             return;
         }
@@ -244,6 +264,7 @@ public sealed class RichTextPreviewPanel : Panel
         Document.DeleteRange(_caretOffset - 1, 1);
         _caretOffset--;
         _selectionAnchor = _caretOffset;
+        _verticalCaretTargetX = null;
         RaiseDocumentChanged();
     }
 
@@ -251,12 +272,14 @@ public sealed class RichTextPreviewPanel : Panel
     {
         if (DeleteSelection())
         {
+            _verticalCaretTargetX = null;
             RaiseDocumentChanged();
             return;
         }
 
         if (_caretOffset >= Document.TextLength) return;
         Document.DeleteRange(_caretOffset, 1);
+        _verticalCaretTargetX = null;
         RaiseDocumentChanged();
     }
 
@@ -280,6 +303,58 @@ public sealed class RichTextPreviewPanel : Panel
         if (!extendSelection)
             _selectionAnchor = _caretOffset;
         Invalidate();
+    }
+
+    private void MoveCaretVertically(int lineDelta, bool extendSelection)
+    {
+        using var g = CreateGraphics();
+        var layout = LayoutDocument(g);
+        if (layout.CaretPositions.Count == 0) return;
+
+        var targetX = _verticalCaretTargetX ?? layout.CaretPositions[_caretOffset].X;
+        var newOffset = FindVerticalCaretOffset(layout, _caretOffset, lineDelta, targetX);
+        _verticalCaretTargetX = targetX;
+
+        _caretOffset = newOffset;
+        if (!extendSelection)
+            _selectionAnchor = _caretOffset;
+        Invalidate();
+    }
+
+    private static int FindVerticalCaretOffset(LayoutResult layout, int currentOffset, int lineDelta, float targetX)
+    {
+        var positions = layout.CaretPositions;
+        if (positions.Count == 0) return currentOffset;
+
+        var currentY = positions[currentOffset].Y;
+
+        // Collect all unique visual line Y values
+        var lineYs = positions.Select(p => p.Y).Distinct().OrderBy(y => y).ToList();
+        var currentLineIndex = lineYs.BinarySearch(currentY);
+        if (currentLineIndex < 0) currentLineIndex = ~currentLineIndex;
+
+        var targetLineIndex = Math.Clamp(currentLineIndex + lineDelta, 0, lineYs.Count - 1);
+        if (targetLineIndex == currentLineIndex && ((lineDelta < 0 && currentLineIndex == 0) || (lineDelta > 0 && currentLineIndex == lineYs.Count - 1)))
+            return currentOffset;
+
+        var targetY = lineYs[targetLineIndex];
+
+        // Find closest offset on the target line to targetX
+        var bestOffset = currentOffset;
+        var bestDistance = double.MaxValue;
+        for (var i = 0; i < positions.Count; i++)
+        {
+            if (Math.Abs(positions[i].Y - targetY) > 0.5f) continue;
+            var dx = positions[i].X - targetX;
+            var distance = dx * dx;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestOffset = i;
+            }
+        }
+
+        return bestOffset;
     }
 
     private void CopySelection()
