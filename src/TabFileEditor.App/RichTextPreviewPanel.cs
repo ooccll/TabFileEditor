@@ -390,7 +390,7 @@ public sealed class RichTextPreviewPanel : Panel
                 }
 
                 font = pfc.Families.Length > 0
-                    ? new Font(pfc.Families[0], spec.Size * 1.2f, GraphicsUnit.Pixel)
+                    ? new Font(pfc.Families[0], spec.Size, GraphicsUnit.Pixel)
                     : new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
             }
             catch

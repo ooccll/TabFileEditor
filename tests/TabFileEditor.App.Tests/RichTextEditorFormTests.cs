@@ -30,6 +30,8 @@ public sealed class RichTextEditorFormTests : IDisposable
             Application.DoEvents();
 
             Assert.Single(FindDescendants<RichTextPreviewPanel>(form));
+            Assert.Contains(FindDescendants<Label>(form),
+                label => label.Text == "  预览编辑（选中文字后右键可直接更改字体）");
             var markupTextBox = Assert.Single(FindDescendants<TextBox>(form), textBox => textBox.Name == "MarkupTextBox");
             Assert.True(markupTextBox.WordWrap);
             Assert.Equal(ScrollBars.Vertical, markupTextBox.ScrollBars);

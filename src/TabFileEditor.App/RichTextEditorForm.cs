@@ -99,7 +99,7 @@ public sealed class RichTextEditorForm : Form
 
     private void BuildLayout()
     {
-        var previewLabel = BuildSectionLabel("  预览编辑");
+        var previewLabel = BuildSectionLabel("  预览编辑（选中文字后右键可直接更改字体）");
         var markupLabel = BuildSectionLabel("  实际标签");
 
         _splitContainer.Dock = DockStyle.Fill;
