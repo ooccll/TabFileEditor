@@ -466,9 +466,18 @@ public sealed class RichTextPreviewPanel : Panel
 
     private static float MeasureCharacterWidth(Graphics g, string text, Font font)
     {
+        if (text == " ")
+            return GetHalfWidthSpaceWidth(font);
+
+        if (text == "\u3000")
+            return GetHalfWidthSpaceWidth(font) * 3.5f;
+
         var measured = g.MeasureString(text, font, PointF.Empty, StringFormat.GenericTypographic);
         return Math.Max(4f, measured.Width);
     }
+
+    private static float GetHalfWidthSpaceWidth(Font font)
+        => Math.Max(4f, font.Size * 0.25f);
 
     private Font GetFont(ResolvedFontSpec spec)
     {

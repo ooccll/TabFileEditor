@@ -87,6 +87,31 @@ public sealed class RichTextPreviewPanelTests : IDisposable
     }
 
     [Fact]
+    public void FullWidthIndentAlignsWithActivityTitleIndent()
+    {
+        var text = "       活动介绍：\n　　1、侠士";
+        using var panel = CreatePanelWithText(text);
+        var caretPositions = GetCaretPositions(panel);
+        var titleX = GetCaretX(caretPositions[text.IndexOf('活')]);
+        var bodyX = GetCaretX(caretPositions[text.IndexOf('1')]);
+
+        Assert.InRange(Math.Abs(titleX - bodyX), 0f, 2f);
+    }
+
+    [Fact]
+    public void FullWidthSpaceAdvanceMatchesGameLikeIndentRatio()
+    {
+        using var panel = CreatePanelWithText(" \u3000");
+        var caretPositions = GetCaretPositions(panel);
+        var halfWidthAdvance = GetCaretX(caretPositions[1]) - GetCaretX(caretPositions[0]);
+        var fullWidthAdvance = GetCaretX(caretPositions[2]) - GetCaretX(caretPositions[1]);
+        var expectedFullWidthAdvance = halfWidthAdvance * 3.5f;
+
+        Assert.True(fullWidthAdvance > halfWidthAdvance * 3f);
+        Assert.InRange(fullWidthAdvance, expectedFullWidthAdvance - 0.5f, expectedFullWidthAdvance + 0.5f);
+    }
+
+    [Fact]
     public void LayoutCreatesCaretPositionForEachTextOffset()
     {
         using var panel = CreatePanelWithText("侠士可在 A B");
