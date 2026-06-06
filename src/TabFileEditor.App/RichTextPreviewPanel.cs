@@ -15,6 +15,7 @@ public sealed class RichTextPreviewPanel : Panel
 
     private const int PaddingPx = 12;
     private const int LineSpacing = 4;
+    private const int CharSpacing = -3;
 
     public event EventHandler? DocumentChanged;
 
@@ -351,7 +352,7 @@ public sealed class RichTextPreviewPanel : Panel
 
                 var charText = ch.ToString();
                 var width = Math.Max(4f, g.MeasureString(charText, font).Width);
-                if (x + width > PaddingPx + maxWidth && x > PaddingPx)
+                if (x + width + CharSpacing > PaddingPx + maxWidth && x > PaddingPx)
                 {
                     x = PaddingPx;
                     y += lineHeight + LineSpacing;
@@ -361,7 +362,7 @@ public sealed class RichTextPreviewPanel : Panel
 
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, charText, bounds, font, spec));
-                x += width;
+                x += width + CharSpacing;
                 lineHeight = Math.Max(lineHeight, font.Height);
                 offset++;
             }
