@@ -21,7 +21,7 @@ public sealed class RichTextEditorFormTests : IDisposable
     }
 
     [Fact]
-    public void DoubleClickingTextColumnStartsExpandedEditor()
+    public void FormUsesEditablePreviewAndMarkupTextBox()
     {
         RunOnStaThread(() =>
         {
@@ -29,21 +29,18 @@ public sealed class RichTextEditorFormTests : IDisposable
             form.Show();
             Application.DoEvents();
 
-            var grid = FindSegmentGrid(form);
-            var textColumnIndex = grid.Columns["Text"]!.Index;
-            var editBox = FindExpandedTextEditor(form);
-            Assert.False(editBox.Visible);
-
-            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
-                new DataGridViewCellEventArgs(textColumnIndex, 0));
-
-            Assert.True(editBox.Visible);
-            Assert.Equal("Hello", editBox.Text);
+            Assert.Single(FindDescendants<RichTextPreviewPanel>(form));
+            Assert.Contains(FindDescendants<Label>(form),
+                label => label.Text == "  预览编辑（选中文字后右键可直接更改字体）");
+            var markupTextBox = Assert.Single(FindDescendants<TextBox>(form), textBox => textBox.Name == "MarkupTextBox");
+            Assert.True(markupTextBox.WordWrap);
+            Assert.Equal(ScrollBars.Vertical, markupTextBox.ScrollBars);
+            Assert.Empty(FindDescendants<DataGridView>(form));
         });
     }
 
     [Fact]
-    public void ExpandedTextEditorTreatsNavigationKeysAsTextInput()
+    public void PreviewTextInputSynchronizesMarkupTextBox()
     {
         RunOnStaThread(() =>
         {
@@ -51,41 +48,20 @@ public sealed class RichTextEditorFormTests : IDisposable
             form.Show();
             Application.DoEvents();
 
-            var grid = FindSegmentGrid(form);
-            var textColumnIndex = grid.Columns["Text"]!.Index;
-            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
-                new DataGridViewCellEventArgs(textColumnIndex, 0));
+            var preview = FindDescendants<RichTextPreviewPanel>(form).Single();
+            var markupTextBox = FindMarkupTextBox(form);
 
-            var editBox = FindExpandedTextEditor(form);
-            Assert.True(editBox.Visible);
+            preview.SetCaretOffset(5);
+            preview.InsertTextAtCaret("!");
+            Application.DoEvents();
 
-            // ExpandedTextBox.IsInputKey should return true for navigation keys
-            var isInputKeyMethod = editBox.GetType().GetMethod(
-                "IsInputKey",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            Assert.NotNull(isInputKeyMethod);
-            Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Left })!);
-            Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Control | Keys.Right })!);
-            Assert.True((bool)isInputKeyMethod.Invoke(editBox, new object[] { Keys.Shift | Keys.Down })!);
-
-            // SegmentDataGridView.ProcessDialogKey should route navigation keys to the expanded editor
-            var processDialogKeyMethod = grid.GetType().GetMethod(
-                "ProcessDialogKey",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            Assert.NotNull(processDialogKeyMethod);
-            Assert.True((bool)processDialogKeyMethod.Invoke(grid, new object[] { Keys.Left })!);
-
-            // SegmentDataGridView.ProcessCmdKey should route navigation keys to the expanded editor
-            var processCmdKeyMethod = grid.GetType().GetMethod(
-                "ProcessCmdKey",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            Assert.NotNull(processCmdKeyMethod);
-            Assert.True((bool)processCmdKeyMethod.Invoke(grid, new object[] { new Message(), Keys.Control | Keys.Right })!);
+            Assert.Equal("<text>text=\"Hello!World\" font=0</text>",
+                markupTextBox.Text);
         });
     }
 
     [Fact]
-    public void ExpandedTextEditorMovesCaretWhenGridReceivesArrowKey()
+    public void InvalidMarkupTextDisablesOkButtonAndKeepsLastValidPreviewDocument()
     {
         RunOnStaThread(() =>
         {
@@ -93,105 +69,16 @@ public sealed class RichTextEditorFormTests : IDisposable
             form.Show();
             Application.DoEvents();
 
-            var grid = FindSegmentGrid(form);
-            var textColumnIndex = grid.Columns["Text"]!.Index;
-            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
-                new DataGridViewCellEventArgs(textColumnIndex, 0));
+            var preview = FindDescendants<RichTextPreviewPanel>(form).Single();
+            var markupTextBox = FindMarkupTextBox(form);
+            var okButton = FindDescendants<Button>(form).Single(button => button.Text == "确定");
 
-            var editBox = FindExpandedTextEditor(form);
-            editBox.Text = "abc";
-            editBox.SelectionStart = 1;
-            editBox.SelectionLength = 0;
-            grid.CurrentCell = grid.Rows[0].Cells[textColumnIndex];
-            Assert.True(editBox.Visible);
-
-            var handled = InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Right);
-
-            Assert.True(handled);
-            Assert.Same(grid.Rows[0].Cells[textColumnIndex], grid.CurrentCell);
-            Assert.Equal(2, editBox.SelectionStart);
-            Assert.Equal(0, editBox.SelectionLength);
-        });
-    }
-
-    [Fact]
-    public void ExpandedTextEditorSupportsCtrlAndShiftNavigationWhenGridReceivesKeys()
-    {
-        RunOnStaThread(() =>
-        {
-            using var form = CreateForm();
-            form.Show();
+            markupTextBox.Text = "<text>text=\"Broken\" font=0";
             Application.DoEvents();
 
-            var grid = FindSegmentGrid(form);
-            var textColumnIndex = grid.Columns["Text"]!.Index;
-            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
-                new DataGridViewCellEventArgs(textColumnIndex, 0));
-
-            var editBox = FindExpandedTextEditor(form);
-            editBox.Text = "abc def";
-            editBox.SelectionStart = 0;
-            editBox.SelectionLength = 0;
-
-            Assert.True(InvokeProtected<bool>(grid, "ProcessCmdKey", new Message(), Keys.Control | Keys.Right));
-            Assert.Equal(4, editBox.SelectionStart);
-            Assert.Equal(0, editBox.SelectionLength);
-
-            Assert.True(InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Shift | Keys.Right));
-            Assert.Equal(4, editBox.SelectionStart);
-            Assert.Equal(1, editBox.SelectionLength);
-        });
-    }
-
-    [Fact]
-    public void ExpandedTextEditorMovesAcrossWrappedVisualLinesWhenGridReceivesDownKey()
-    {
-        RunOnStaThread(() =>
-        {
-            using var form = CreateForm();
-            form.Show();
-            Application.DoEvents();
-
-            var grid = FindSegmentGrid(form);
-            var textColumnIndex = grid.Columns["Text"]!.Index;
-            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
-                new DataGridViewCellEventArgs(textColumnIndex, 0));
-
-            var editBox = FindExpandedTextEditor(form);
-            editBox.Width = 90;
-            editBox.Text = "alpha beta gamma delta epsilon zeta eta theta iota kappa";
-            editBox.SelectionStart = 0;
-            editBox.SelectionLength = 0;
-            Assert.Single(editBox.Lines);
-
-            Assert.True(InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Down));
-            var afterFirstDown = editBox.SelectionStart;
-            Assert.True(afterFirstDown > 0);
-
-            Assert.True(InvokeProtected<bool>(grid, "ProcessDialogKey", Keys.Down));
-
-            Assert.True(editBox.SelectionStart > afterFirstDown);
-        });
-    }
-
-    [Fact]
-    public void DoubleClickingNonTextColumnDoesNotStartExpandedEditor()
-    {
-        RunOnStaThread(() =>
-        {
-            using var form = CreateForm();
-            form.Show();
-            Application.DoEvents();
-
-            var grid = FindSegmentGrid(form);
-            var fontSchemeIdColumnIndex = grid.Columns["FontSchemeId"]!.Index;
-            var editBox = FindExpandedTextEditor(form);
-            Assert.False(editBox.Visible);
-
-            InvokePrivate(form, "OnSegmentGridCellDoubleClick", grid,
-                new DataGridViewCellEventArgs(fontSchemeIdColumnIndex, 0));
-
-            Assert.False(editBox.Visible);
+            Assert.False(okButton.Enabled);
+            Assert.Equal("HelloWorld", preview.Document.GetPlainText());
+            Assert.Equal("<text>text=\"Broken\" font=0", markupTextBox.Text);
         });
     }
 
@@ -204,32 +91,9 @@ public sealed class RichTextEditorFormTests : IDisposable
         return new RichTextEditorForm(markup, loader);
     }
 
-    private static DataGridView FindSegmentGrid(Form form)
+    private static TextBox FindMarkupTextBox(Form form)
     {
-        return FindDescendants<DataGridView>(form).Single();
-    }
-
-    private static TextBox FindExpandedTextEditor(Form form)
-    {
-        return FindDescendants<TextBox>(form).Single(textBox => textBox.Name == "ExpandedTextEditorTextBox");
-    }
-
-    private static void InvokePrivate(object target, string methodName, params object[] args)
-    {
-        var method = target.GetType().GetMethod(
-            methodName,
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        method.Invoke(target, args);
-    }
-
-    private static T InvokeProtected<T>(object target, string methodName, params object[] args)
-    {
-        var method = target.GetType().GetMethod(
-            methodName,
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        return Assert.IsAssignableFrom<T>(method.Invoke(target, args));
+        return FindDescendants<TextBox>(form).Single(textBox => textBox.Name == "MarkupTextBox");
     }
 
     private static void RunOnStaThread(Action action)
@@ -251,26 +115,6 @@ public sealed class RichTextEditorFormTests : IDisposable
         thread.Start();
         thread.Join();
         exception?.Throw();
-    }
-
-    private static TControl? FindDescendant<TControl>(Control parent)
-        where TControl : Control
-    {
-        foreach (Control child in parent.Controls)
-        {
-            if (child is TControl match)
-            {
-                return match;
-            }
-
-            var descendant = FindDescendant<TControl>(child);
-            if (descendant is not null)
-            {
-                return descendant;
-            }
-        }
-
-        return null;
     }
 
     private static IReadOnlyList<TControl> FindDescendants<TControl>(Control parent)

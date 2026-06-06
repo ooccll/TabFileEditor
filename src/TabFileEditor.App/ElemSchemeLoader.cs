@@ -92,11 +92,7 @@ public sealed class ElemSchemeLoader
         var size = scheme.Size > 0 ? scheme.Size : (fontDef.Size > 0 ? fontDef.Size : 16);
         size = Math.Max(size, 10);
 
-        var fontFile = NormalizeFontPath(fontDef.File);
-        if (!string.IsNullOrEmpty(fontFile) && !Path.IsPathRooted(fontFile))
-        {
-            fontFile = Path.Combine(ClientUiRoot, fontFile);
-        }
+        var fontFile = ResolveFontFilePath(fontDef.File);
 
         return new ResolvedFontSpec
         {
@@ -304,15 +300,41 @@ public sealed class ElemSchemeLoader
         return defaultValue;
     }
 
-    private static string NormalizeFontPath(string path)
+    private string ResolveFontFilePath(string path)
     {
         if (string.IsNullOrEmpty(path)) return path;
+
         var normalized = path.Replace('/', '\\');
-        if (normalized.StartsWith("\\UI\\", StringComparison.OrdinalIgnoreCase))
-            normalized = "UI" + normalized[3..];
-        else if (normalized.StartsWith("\\", StringComparison.Ordinal))
-            normalized = normalized[1..];
-        return normalized;
+        if (IsAbsoluteFontPath(normalized))
+            return normalized;
+
+        var fontDirectory = Path.Combine(ClientUiRoot, "Font");
+        var relativeFontPath = NormalizeRelativeFontPath(normalized);
+
+        if (relativeFontPath.StartsWith("UI\\Font\\", StringComparison.OrdinalIgnoreCase))
+        {
+            relativeFontPath = relativeFontPath["UI\\Font\\".Length..];
+        }
+        else if (relativeFontPath.StartsWith("Font\\", StringComparison.OrdinalIgnoreCase))
+        {
+            relativeFontPath = relativeFontPath["Font\\".Length..];
+        }
+        else if (relativeFontPath.StartsWith("UI\\", StringComparison.OrdinalIgnoreCase))
+        {
+            relativeFontPath = relativeFontPath["UI\\".Length..];
+        }
+
+        return Path.Combine(fontDirectory, relativeFontPath);
+    }
+
+    private static string NormalizeRelativeFontPath(string path)
+    {
+        return path.TrimStart('\\');
+    }
+
+    private static bool IsAbsoluteFontPath(string path)
+    {
+        return path.Length >= 2 && (path[1] == Path.VolumeSeparatorChar || path.StartsWith(@"\\", StringComparison.Ordinal));
     }
 
     public static string? ResolveElemDirectory(string documentPath)
