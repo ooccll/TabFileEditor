@@ -93,7 +93,6 @@ public sealed class RichTextEditorForm : Form
             Close();
         };
 
-        AcceptButton = _okButton;
         CancelButton = _cancelButton;
     }
 
@@ -193,7 +192,7 @@ public sealed class RichTextEditorForm : Form
             : error;
     }
 
-    private void OnOkClick(object? sender, EventArgs e)
+    public void AcceptDialog()
     {
         if (!RichTextMarkup.TryParse(_markupTextBox.Text, out var parsedDocument, out var error))
         {
@@ -205,6 +204,8 @@ public sealed class RichTextEditorForm : Form
         DialogResult = DialogResult.OK;
         Close();
     }
+
+    private void OnOkClick(object? sender, EventArgs e) => AcceptDialog();
 
     protected override void OnLoad(EventArgs e)
     {

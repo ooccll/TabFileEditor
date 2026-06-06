@@ -183,14 +183,24 @@ public sealed class RichTextPreviewPanel : Panel
                 e.SuppressKeyPress = true;
                 return;
             }
+            if (e.KeyCode == Keys.Enter)
+            {
+                if (FindForm() is RichTextEditorForm editorForm)
+                    editorForm.AcceptDialog();
+                e.SuppressKeyPress = true;
+                return;
+            }
+        }
+
+        if (e.KeyCode == Keys.Enter)
+        {
+            InsertTextAtCaret("\n");
+            e.SuppressKeyPress = true;
+            return;
         }
 
         switch (e.KeyCode)
         {
-            case Keys.Enter:
-                InsertTextAtCaret("\n");
-                e.SuppressKeyPress = true;
-                break;
             case Keys.Back:
                 Backspace();
                 e.SuppressKeyPress = true;
