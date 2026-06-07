@@ -87,7 +87,7 @@ public sealed class MainForm : Form
         MinimumSize = new Size(Scaled(900), Scaled(540));
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(Scaled(DefaultWindowWidth), Scaled(DefaultWindowHeight));
-        Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+        Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point);
         DpiChanged += (_, _) => ApplyLeftPanelDpiScaling();
 
         BuildUi();
