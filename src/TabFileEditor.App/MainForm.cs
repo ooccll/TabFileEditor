@@ -84,9 +84,9 @@ public sealed class MainForm : Form
     {
         Text = AppName;
         BackColor = WindowBg;
-        MinimumSize = new Size(900, 540);
+        MinimumSize = new Size(Scaled(900), Scaled(540));
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(DefaultWindowWidth, DefaultWindowHeight);
+        ClientSize = new Size(Scaled(DefaultWindowWidth), Scaled(DefaultWindowHeight));
         Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
         DpiChanged += (_, _) => ApplyLeftPanelDpiScaling();
 
@@ -166,13 +166,13 @@ public sealed class MainForm : Form
             ColumnCount = 4,
             RowCount = 1,
             BackColor = PanelBg,
-            Margin = new Padding(10, 10, 10, 6),
-            Padding = new Padding(10, 6, 10, 6),
+            Margin = new Padding(Scaled(10), Scaled(10), Scaled(10), Scaled(6)),
+            Padding = new Padding(Scaled(10), Scaled(6), Scaled(10), Scaled(6)),
         };
-        fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+        fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(76)));
         fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
-        fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
+        fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(86)));
+        fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(108)));
         fileBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         fileBar.Paint += DrawPanelBorder;
         root.Controls.Add(fileBar, 0, 1);
@@ -182,7 +182,7 @@ public sealed class MainForm : Form
         _filePathTextBox.Name = "FilePathTextBox";
         _filePathTextBox.Dock = DockStyle.None;
         _filePathTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _filePathTextBox.Margin = new Padding(0, 1, 8, 1);
+        _filePathTextBox.Margin = new Padding(0, Scaled(1), Scaled(8), Scaled(1));
         _filePathTextBox.BorderStyle = BorderStyle.FixedSingle;
         fileBar.Controls.Add(_filePathTextBox, 1, 0);
 
@@ -230,7 +230,7 @@ public sealed class MainForm : Form
 
         BuildRowListPanel();
         ConfigureDetailGrid();
-        _splitContainer.Panel2.Padding = new Padding(0, 0, 6, 0);
+        _splitContainer.Panel2.Padding = new Padding(0, 0, Scaled(6), 0);
     }
 
     private void BuildRowListPanel()
@@ -343,14 +343,14 @@ public sealed class MainForm : Form
         _detailGrid.BorderStyle = BorderStyle.FixedSingle;
         _detailGrid.CellBorderStyle = DataGridViewCellBorderStyle.Single;
         _detailGrid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-        _detailGrid.ColumnHeadersHeight = 34;
+        _detailGrid.ColumnHeadersHeight = Scaled(34);
         _detailGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _detailGrid.EnableHeadersVisualStyles = false;
         _detailGrid.GridColor = BorderColor;
         _detailGrid.EditMode = DataGridViewEditMode.EditProgrammatically;
         _detailGrid.MultiSelect = true;
         _detailGrid.RowHeadersVisible = false;
-        _detailGrid.RowTemplate.Height = DetailGridRowHeight;
+        _detailGrid.RowTemplate.Height = Scaled(DetailGridRowHeight);
         _detailGrid.SelectionMode = DataGridViewSelectionMode.CellSelect;
         _detailGrid.ColumnHeadersDefaultCellStyle.BackColor = HeaderBg;
         _detailGrid.ColumnHeadersDefaultCellStyle.ForeColor = TextColor;
@@ -380,7 +380,7 @@ public sealed class MainForm : Form
             Padding = Padding.Empty,
         };
         detailPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        detailPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        detailPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, Scaled(38)));
         detailPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         detailPanel.Controls.Add(BuildTitleRowSelectorPanel(), 0, 0);
         detailPanel.Controls.Add(_detailGrid, 0, 1);
@@ -395,9 +395,9 @@ public sealed class MainForm : Form
             ColumnCount = 2,
             RowCount = 1,
             BackColor = WindowBg,
-            Margin = new Padding(0, 0, 0, 4),
+            Margin = new Padding(0, 0, 0, Scaled(6)),
         };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(78)));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -411,7 +411,7 @@ public sealed class MainForm : Form
         _titleRowSelectorButton.FlatAppearance.BorderColor = BorderColor;
         _titleRowSelectorButton.Margin = new Padding(0, 0, 0, 0);
         _titleRowSelectorButton.TextAlign = ContentAlignment.MiddleLeft;
-        _titleRowSelectorButton.Padding = new Padding(6, 0, 6, 0);
+        _titleRowSelectorButton.Padding = new Padding(Scaled(6), 0, Scaled(6), 0);
         _titleRowSelectorButton.Enabled = false;
         _titleRowSelectorButton.Click += (_, _) => ShowTitleRowDropDown();
         panel.Controls.Add(_titleRowSelectorButton, 1, 0);
@@ -626,7 +626,7 @@ public sealed class MainForm : Form
         _timeFieldButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
         _timeFieldButton.AutoSize = true;
         _timeFieldButton.AutoSizeMode = AutoSizeMode.GrowOnly;
-        _timeFieldButton.MinimumSize = new Size(50, DetailGridRowHeight);
+        _timeFieldButton.MinimumSize = new Size(50, Scaled(DetailGridRowHeight));
         _timeFieldButton.Cursor = Cursors.Hand;
         _timeFieldButton.Click += (_, _) => OpenTimePickerDialog();
         _detailGrid.Controls.Add(_timeFieldButton);
@@ -643,7 +643,7 @@ public sealed class MainForm : Form
         _frameSelectButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
         _frameSelectButton.AutoSize = true;
         _frameSelectButton.AutoSizeMode = AutoSizeMode.GrowOnly;
-        _frameSelectButton.MinimumSize = new Size(50, DetailGridRowHeight);
+        _frameSelectButton.MinimumSize = new Size(50, Scaled(DetailGridRowHeight));
         _frameSelectButton.Cursor = Cursors.Hand;
         _frameSelectButton.Click += (_, _) => OpenFrameSelectorDialog();
         _detailGrid.Controls.Add(_frameSelectButton);
@@ -660,7 +660,7 @@ public sealed class MainForm : Form
         _richTextButton.Font = new Font(Font.FontFamily, 9F, FontStyle.Regular);
         _richTextButton.AutoSize = true;
         _richTextButton.AutoSizeMode = AutoSizeMode.GrowOnly;
-        _richTextButton.MinimumSize = new Size(50, DetailGridRowHeight);
+        _richTextButton.MinimumSize = new Size(50, Scaled(DetailGridRowHeight));
         _richTextButton.Cursor = Cursors.Hand;
         _richTextButton.Click += (_, _) => OpenRichTextEditorDialog();
         _detailGrid.Controls.Add(_richTextButton);
@@ -1133,11 +1133,11 @@ public sealed class MainForm : Form
             RowCount = 1,
             BackColor = WindowBg,
             Margin = new Padding(0),
-            Padding = new Padding(10, 4, 10, 8),
+            Padding = new Padding(Scaled(10), Scaled(4), Scaled(10), Scaled(8)),
         };
         bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, OpenTableDirectoryButtonWidth));
-        bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, SaveButtonWidth));
+        bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(OpenTableDirectoryButtonWidth)));
+        bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(SaveButtonWidth)));
         bottomBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.Controls.Add(bottomBar, 0, 4);
 
@@ -1895,7 +1895,7 @@ public sealed class MainForm : Form
         var requiredHeight = CalculateExpandedValueEditorRequiredHeight(text, _detailGrid.Font, cellBounds.Width);
         var availableHeight = Math.Max(
             cellBounds.Height,
-            _detailGrid.ClientSize.Height - cellBounds.Top - ExpandedValueEditorBottomMargin);
+            _detailGrid.ClientSize.Height - cellBounds.Top - Scaled(ExpandedValueEditorBottomMargin));
         var height = Math.Clamp(requiredHeight, cellBounds.Height, availableHeight);
 
         return new Rectangle(cellBounds.Left, cellBounds.Top, cellBounds.Width, height);
@@ -1917,7 +1917,7 @@ public sealed class MainForm : Form
 
         var rowHeight = rowIndex >= 0 && rowIndex < _detailGrid.Rows.Count
             ? _detailGrid.Rows[rowIndex].Height
-            : DetailGridRowHeight;
+            : Scaled(DetailGridRowHeight);
         return new Rectangle(
             left,
             _detailGrid.ColumnHeadersHeight + (rowIndex * rowHeight),
@@ -2067,16 +2067,16 @@ public sealed class MainForm : Form
         }
     }
 
-    private static int CalculateExpandedValueEditorRequiredHeight(string text, Font font, int editorWidth)
+    private int CalculateExpandedValueEditorRequiredHeight(string text, Font font, int editorWidth)
     {
         var measureText = string.IsNullOrEmpty(text) ? " " : text;
-        var measureWidth = Math.Max(1, editorWidth - ExpandedValueEditorPadding);
+        var measureWidth = Math.Max(1, editorWidth - Scaled(ExpandedValueEditorPadding));
         var measured = TextRenderer.MeasureText(
             measureText,
             font,
             new Size(measureWidth, 10000),
             TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
-        return Math.Max(DetailGridRowHeight, measured.Height + ExpandedValueEditorPadding);
+        return Math.Max(Scaled(DetailGridRowHeight), measured.Height + Scaled(ExpandedValueEditorPadding));
     }
 
     private void UpdateDetailCurrentRowHighlight()
@@ -2861,11 +2861,11 @@ public sealed class MainForm : Form
         };
     }
 
-    private static void ConfigureButton(Button button, string text, bool accent = false)
+    private void ConfigureButton(Button button, string text, bool accent = false)
     {
         button.Text = text;
         button.Dock = DockStyle.Fill;
-        button.Margin = new Padding(4, 0, 0, 0);
+        button.Margin = new Padding(Scaled(4), 0, 0, 0);
         button.FlatStyle = FlatStyle.Flat;
         button.BackColor = accent ? AccentColor : PanelBg;
         button.ForeColor = accent ? Color.White : TextColor;
