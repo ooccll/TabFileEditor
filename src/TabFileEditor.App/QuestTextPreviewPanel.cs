@@ -7,18 +7,25 @@ namespace TabFileEditor.App;
 public sealed class QuestTextPreviewPanel : Panel
 {
     private readonly ElemSchemeLoader _loader;
-    private readonly Dictionary<(string file, int size), Font> _fontCache = [];
+    private readonly Dictionary<(string file, int size, int dpi), Font> _fontCache = [];
     private readonly Dictionary<string, PrivateFontCollection> _pfcCache = [];
     private readonly ContextMenuStrip _contextMenu = new();
     private int _caretOffset;
     private int _selectionAnchor;
     private bool _draggingSelection;
     private float? _verticalCaretTargetX;
+    private int _lastDeviceDpi;
 
-    private const int PaddingPx = 12;
-    private const int LineSpacing = 4;
-    private const int CharSpacing = 0;
-    private const float IndentWidth = 32f; // 2em for <G>
+    private const int PaddingPxBase = 12;
+    private const int LineSpacingBase = 4;
+    private const float IndentWidthBase = 32f;
+
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int px) => (int)Math.Round(px * DpiScale);
+    private float ScaledF(float px) => px * DpiScale;
+    private int PaddingPx => Scaled(PaddingPxBase);
+    private int LineSpacing => Scaled(LineSpacingBase);
+    private float IndentWidth => ScaledF(IndentWidthBase);
 
     public event EventHandler? DocumentChanged;
 
@@ -154,7 +161,7 @@ public sealed class QuestTextPreviewPanel : Panel
         if (Focused && _caretOffset >= 0 && _caretOffset < layout.CaretPositions.Count)
         {
             var caret = layout.CaretPositions[_caretOffset];
-            using var caretPen = new Pen(Color.White, 1.5f);
+            using var caretPen = new Pen(Color.White, ScaledF(1.5f));
             g.DrawLine(caretPen, caret.X, caret.Y, caret.X, caret.Y + caret.Height);
         }
 
@@ -539,7 +546,7 @@ public sealed class QuestTextPreviewPanel : Panel
         var maxWidth = Math.Max(1, ClientSize.Width - PaddingPx * 2);
         var x = (float)PaddingPx;
         var y = (float)PaddingPx;
-        var lineHeight = 18f;
+        var lineHeight = ScaledF(18f);
         var buf = Document.Buffer;
 
         for (var offset = 0; offset < buf.Count; offset++)
@@ -562,7 +569,7 @@ public sealed class QuestTextPreviewPanel : Panel
 
             if (ch == QuestTextDocument.LineHeightMarker)
             {
-                var barHeight = 16f;
+                var barHeight = ScaledF(16f);
                 caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
                 y += barHeight;
                 var bounds = new RectangleF(PaddingPx, y - barHeight / 2, maxWidth, barHeight);
@@ -579,7 +586,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var width = g.MeasureString(displayText, font, PointF.Empty, StringFormat.GenericTypographic).Width;
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, displayText, bounds, font, spec, RenderKind.IconPlaceholder));
-                x += width + CharSpacing;
+                x += width;
                 lineHeight = Math.Max(lineHeight, font.Height);
                 continue;
             }
@@ -593,7 +600,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var width = g.MeasureString(displayText, font, PointF.Empty, StringFormat.GenericTypographic).Width;
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, displayText, bounds, font, spec, RenderKind.MoneyPlaceholder));
-                x += width + CharSpacing;
+                x += width;
                 lineHeight = Math.Max(lineHeight, font.Height);
                 continue;
             }
@@ -608,7 +615,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var width = g.MeasureString(displayText, font, PointF.Empty, StringFormat.GenericTypographic).Width;
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, displayText, bounds, font, spec, RenderKind.ReservedTagPlaceholder));
-                x += width + CharSpacing;
+                x += width;
                 lineHeight = Math.Max(lineHeight, font.Height);
                 continue;
             }
@@ -630,7 +637,7 @@ public sealed class QuestTextPreviewPanel : Panel
                     var bounds = new RectangleF(x + totalWidth, y, charWidth, placeholderFont.Height);
                     items.Add(new CharLayoutItem(charIdx, charText, bounds, placeholderFont,
                         _loader.ResolveFont(QuestTextDocument.DefaultFontSchemeId), placeholderRenderKind));
-                    totalWidth += charWidth + CharSpacing;
+                    totalWidth += charWidth;
                     charIdx++;
                 }
 
@@ -654,7 +661,7 @@ public sealed class QuestTextPreviewPanel : Panel
 
             var normalText = ch.ToString();
             var width2 = MeasureCharacterWidth(g, normalText, font);
-            if (x + width2 + CharSpacing > PaddingPx + maxWidth
+            if (x + width2 > PaddingPx + maxWidth
                 && x > PaddingPx
                 && !IsForbiddenLineStartSymbol(ch))
             {
@@ -666,7 +673,7 @@ public sealed class QuestTextPreviewPanel : Panel
 
             var charBounds = new RectangleF(x, y, width2, font.Height);
             items.Add(new CharLayoutItem(offset, normalText, charBounds, font, spec, RenderKind.Normal));
-            x += width2 + CharSpacing;
+            x += width2;
             lineHeight = Math.Max(lineHeight, font.Height);
         }
 
@@ -684,22 +691,22 @@ public sealed class QuestTextPreviewPanel : Panel
 
         DrawStyledText(g, item.Text, item.Font, item.Spec, item.Bounds.Location);
 
-        using var pen = new Pen(underlineColor, 1f) { DashStyle = DashStyle.Dash };
+        using var pen = new Pen(underlineColor, ScaledF(1f)) { DashStyle = DashStyle.Dash };
         g.DrawLine(pen, item.Bounds.Left, item.Bounds.Bottom - 1, item.Bounds.Right, item.Bounds.Bottom - 1);
     }
 
     private void DrawLineHeightBar(Graphics g, CharLayoutItem item)
     {
-        using var pen = new Pen(Color.FromArgb(0x44, 0x44, 0x44), 1f) { DashStyle = DashStyle.Dot };
+        using var pen = new Pen(Color.FromArgb(0x44, 0x44, 0x44), ScaledF(1f)) { DashStyle = DashStyle.Dot };
         var centerY = item.Bounds.Y + item.Bounds.Height / 2;
-        g.DrawLine(pen, item.Bounds.Left + 4, centerY, item.Bounds.Right - 4, centerY);
+        g.DrawLine(pen, item.Bounds.Left + Scaled(4), centerY, item.Bounds.Right - Scaled(4), centerY);
     }
 
     private void DrawIconPlaceholder(Graphics g, CharLayoutItem item)
     {
         using var backBrush = new SolidBrush(Color.FromArgb(0x33, 0x33, 0x44));
         g.FillRectangle(backBrush, item.Bounds);
-        using var borderPen = new Pen(Color.FromArgb(0x66, 0x66, 0x88), 1f);
+        using var borderPen = new Pen(Color.FromArgb(0x66, 0x66, 0x88), ScaledF(1f));
         g.DrawRectangle(borderPen, item.Bounds.X, item.Bounds.Y, item.Bounds.Width, item.Bounds.Height);
         using var textBrush = new SolidBrush(Color.FromArgb(0xAA, 0xAA, 0xCC));
         g.DrawString(item.Text, item.Font, textBrush, item.Bounds.Location);
@@ -709,7 +716,7 @@ public sealed class QuestTextPreviewPanel : Panel
     {
         using var backBrush = new SolidBrush(Color.FromArgb(0x33, 0x2B, 0x00));
         g.FillRectangle(backBrush, item.Bounds);
-        using var borderPen = new Pen(Color.FromArgb(0x88, 0x77, 0x00), 1f);
+        using var borderPen = new Pen(Color.FromArgb(0x88, 0x77, 0x00), ScaledF(1f));
         g.DrawRectangle(borderPen, item.Bounds.X, item.Bounds.Y, item.Bounds.Width, item.Bounds.Height);
         using var textBrush = new SolidBrush(Color.FromArgb(0xFF, 0xDD, 0x00));
         g.DrawString(item.Text, item.Font, textBrush, item.Bounds.Location);
@@ -743,7 +750,15 @@ public sealed class QuestTextPreviewPanel : Panel
 
     private Font GetFont(ResolvedFontSpec spec)
     {
-        var key = (spec.FontFile, spec.Size);
+        if (_lastDeviceDpi != 0 && _lastDeviceDpi != DeviceDpi)
+        {
+            foreach (var f in _fontCache.Values) f.Dispose();
+            _fontCache.Clear();
+        }
+        _lastDeviceDpi = DeviceDpi;
+
+        var scaledSize = (int)Math.Round(spec.Size * DpiScale);
+        var key = (spec.FontFile, scaledSize, DeviceDpi);
         if (_fontCache.TryGetValue(key, out var cached))
             return cached;
 
@@ -760,17 +775,17 @@ public sealed class QuestTextPreviewPanel : Panel
                 }
 
                 font = pfc.Families.Length > 0
-                    ? new Font(pfc.Families[0], spec.Size, GraphicsUnit.Pixel)
-                    : new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
+                    ? new Font(pfc.Families[0], scaledSize, GraphicsUnit.Pixel)
+                    : new Font("Microsoft YaHei UI", scaledSize, GraphicsUnit.Pixel);
             }
             catch
             {
-                font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
+                font = new Font("Microsoft YaHei UI", scaledSize, GraphicsUnit.Pixel);
             }
         }
         else
         {
-            font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
+            font = new Font("Microsoft YaHei UI", scaledSize, GraphicsUnit.Pixel);
         }
 
         _fontCache[key] = font;

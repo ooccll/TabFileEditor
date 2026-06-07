@@ -6,17 +6,23 @@ namespace TabFileEditor.App;
 public sealed class RichTextPreviewPanel : Panel
 {
     private readonly ElemSchemeLoader _loader;
-    private readonly Dictionary<(string file, int size), Font> _fontCache = [];
+    private readonly Dictionary<(string file, int size, int dpi), Font> _fontCache = [];
     private readonly Dictionary<string, PrivateFontCollection> _pfcCache = [];
     private readonly ContextMenuStrip _contextMenu = new();
     private int _caretOffset;
     private int _selectionAnchor;
     private bool _draggingSelection;
     private float? _verticalCaretTargetX;
+    private int _lastDeviceDpi;
 
-    private const int PaddingPx = 12;
-    private const int LineSpacing = 4;
-    private const int CharSpacing = 0;
+    private const int PaddingPxBase = 12;
+    private const int LineSpacingBase = 4;
+
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int px) => (int)Math.Round(px * DpiScale);
+    private float ScaledF(float px) => px * DpiScale;
+    private int PaddingPx => Scaled(PaddingPxBase);
+    private int LineSpacing => Scaled(LineSpacingBase);
 
     public event EventHandler? DocumentChanged;
 
@@ -101,7 +107,7 @@ public sealed class RichTextPreviewPanel : Panel
         if (Focused && _caretOffset >= 0 && _caretOffset < layout.CaretPositions.Count)
         {
             var caret = layout.CaretPositions[_caretOffset];
-            using var caretPen = new Pen(Color.White, 1.5f);
+            using var caretPen = new Pen(Color.White, ScaledF(1.5f));
             g.DrawLine(caretPen, caret.X, caret.Y, caret.X, caret.Y + caret.Height);
         }
 
@@ -420,7 +426,7 @@ public sealed class RichTextPreviewPanel : Panel
         var maxWidth = Math.Max(1, ClientSize.Width - PaddingPx * 2);
         var x = (float)PaddingPx;
         var y = (float)PaddingPx;
-        var lineHeight = 18f;
+        var lineHeight = ScaledF(18f);
         var offset = 0;
 
         foreach (var segment in Document.Segments)
@@ -444,7 +450,7 @@ public sealed class RichTextPreviewPanel : Panel
 
                 var charText = ch.ToString();
                 var width = MeasureCharacterWidth(g, charText, font);
-                if (x + width + CharSpacing > PaddingPx + maxWidth
+                if (x + width > PaddingPx + maxWidth
                     && x > PaddingPx
                     && !IsForbiddenLineStartSymbol(ch))
                 {
@@ -456,7 +462,7 @@ public sealed class RichTextPreviewPanel : Panel
 
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, charText, bounds, font, spec));
-                x += width + CharSpacing;
+                x += width;
                 lineHeight = Math.Max(lineHeight, font.Height);
                 offset++;
             }
@@ -486,7 +492,15 @@ public sealed class RichTextPreviewPanel : Panel
 
     private Font GetFont(ResolvedFontSpec spec)
     {
-        var key = (spec.FontFile, spec.Size);
+        if (_lastDeviceDpi != 0 && _lastDeviceDpi != DeviceDpi)
+        {
+            foreach (var f in _fontCache.Values) f.Dispose();
+            _fontCache.Clear();
+        }
+        _lastDeviceDpi = DeviceDpi;
+
+        var scaledSize = (int)Math.Round(spec.Size * DpiScale);
+        var key = (spec.FontFile, scaledSize, DeviceDpi);
         if (_fontCache.TryGetValue(key, out var cached))
             return cached;
 
@@ -503,17 +517,17 @@ public sealed class RichTextPreviewPanel : Panel
                 }
 
                 font = pfc.Families.Length > 0
-                    ? new Font(pfc.Families[0], spec.Size, GraphicsUnit.Pixel)
-                    : new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
+                    ? new Font(pfc.Families[0], scaledSize, GraphicsUnit.Pixel)
+                    : new Font("Microsoft YaHei UI", scaledSize, GraphicsUnit.Pixel);
             }
             catch
             {
-                font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
+                font = new Font("Microsoft YaHei UI", scaledSize, GraphicsUnit.Pixel);
             }
         }
         else
         {
-            font = new Font("Microsoft YaHei UI", spec.Size, GraphicsUnit.Pixel);
+            font = new Font("Microsoft YaHei UI", scaledSize, GraphicsUnit.Pixel);
         }
 
         _fontCache[key] = font;

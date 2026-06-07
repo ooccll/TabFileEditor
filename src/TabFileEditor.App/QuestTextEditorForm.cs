@@ -22,13 +22,16 @@ public sealed class QuestTextEditorForm : Form
     private static readonly Color MutedTextColor = Color.FromArgb(0x47, 0x55, 0x69);
     private static readonly Color ErrorTextColor = Color.FromArgb(0xB9, 0x1C, 0x1C);
 
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int pixels) => (int)Math.Round(pixels * DpiScale);
+
     public QuestTextEditorForm(string tagText, ElemSchemeLoader loader)
     {
         _loader = loader;
         _document = QuestTextParser.Parse(tagText);
 
         Text = "任务文本编辑器";
-        Size = new Size(900, 800);
+        Size = new Size(Scaled(900), Scaled(800));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
@@ -51,6 +54,8 @@ public sealed class QuestTextEditorForm : Form
 
         UpdateSourceTextFromDocument();
         UpdateValidationState(null);
+
+        DpiChanged += (_, _) => ApplyDpiScaling();
     }
 
     private void BuildToolStrip()
@@ -58,7 +63,7 @@ public sealed class QuestTextEditorForm : Form
         _toolStrip.Dock = DockStyle.Top;
         _toolStrip.BackColor = Color.FromArgb(0xE8, 0xEB, 0xF0);
         _toolStrip.GripStyle = ToolStripGripStyle.Hidden;
-        _toolStrip.Padding = new Padding(4, 2, 4, 2);
+        _toolStrip.Padding = new Padding(Scaled(4), Scaled(2), Scaled(4), Scaled(2));
         _toolStrip.Font = new Font("Microsoft YaHei UI", 9F);
 
         // <G> 缩进
@@ -130,17 +135,17 @@ public sealed class QuestTextEditorForm : Form
         using var inputForm = new Form
         {
             Text = "插入图标",
-            Size = new Size(300, 140),
+            Size = new Size(Scaled(300), Scaled(140)),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
             MinimizeBox = false,
             ShowInTaskbar = false,
         };
-        var label = new Label { Text = "图标 ID:", Location = new Point(16, 16), AutoSize = true };
-        var textBox = new TextBox { Location = new Point(16, 40), Width = 250 };
-        var okBtn = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(110, 70), Size = new Size(80, 28) };
-        var cancelBtn = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(196, 70), Size = new Size(80, 28) };
+        var label = new Label { Text = "图标 ID:", Location = new Point(Scaled(16), Scaled(16)), AutoSize = true };
+        var textBox = new TextBox { Location = new Point(Scaled(16), Scaled(40)), Width = Scaled(250) };
+        var okBtn = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(Scaled(110), Scaled(70)), Size = new Size(Scaled(80), Scaled(28)) };
+        var cancelBtn = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(Scaled(196), Scaled(70)), Size = new Size(Scaled(80), Scaled(28)) };
         inputForm.Controls.AddRange([label, textBox, okBtn, cancelBtn]);
         inputForm.AcceptButton = okBtn;
         inputForm.CancelButton = cancelBtn;
@@ -155,18 +160,18 @@ public sealed class QuestTextEditorForm : Form
         using var inputForm = new Form
         {
             Text = "插入金钱",
-            Size = new Size(300, 150),
+            Size = new Size(Scaled(300), Scaled(150)),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
             MinimizeBox = false,
             ShowInTaskbar = false,
         };
-        var label = new Label { Text = "金额:", Location = new Point(16, 16), AutoSize = true };
-        var textBox = new TextBox { Location = new Point(16, 40), Width = 250 };
-        var compareCheck = new CheckBox { Text = "比较（金币不足时变红）", Location = new Point(16, 68), AutoSize = true };
-        var okBtn = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(110, 90), Size = new Size(80, 28) };
-        var cancelBtn = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(196, 90), Size = new Size(80, 28) };
+        var label = new Label { Text = "金额:", Location = new Point(Scaled(16), Scaled(16)), AutoSize = true };
+        var textBox = new TextBox { Location = new Point(Scaled(16), Scaled(40)), Width = Scaled(250) };
+        var compareCheck = new CheckBox { Text = "比较（金币不足时变红）", Location = new Point(Scaled(16), Scaled(68)), AutoSize = true };
+        var okBtn = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(Scaled(110), Scaled(90)), Size = new Size(Scaled(80), Scaled(28)) };
+        var cancelBtn = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(Scaled(196), Scaled(90)), Size = new Size(Scaled(80), Scaled(28)) };
         inputForm.Controls.AddRange([label, textBox, compareCheck, okBtn, cancelBtn]);
         inputForm.AcceptButton = okBtn;
         inputForm.CancelButton = cancelBtn;
@@ -193,7 +198,7 @@ public sealed class QuestTextEditorForm : Form
     private void BuildStatusLabel()
     {
         _statusLabel.Dock = DockStyle.Bottom;
-        _statusLabel.Height = 26;
+        _statusLabel.Height = Scaled(26);
         _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
         _statusLabel.ForeColor = MutedTextColor;
         _statusLabel.BackColor = WindowBg;
@@ -202,7 +207,7 @@ public sealed class QuestTextEditorForm : Form
     private void BuildButtons()
     {
         _okButton.Text = "确定";
-        _okButton.Size = new Size(80, 34);
+        _okButton.Size = new Size(Scaled(80), Scaled(34));
         _okButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _okButton.BackColor = AccentColor;
         _okButton.ForeColor = Color.White;
@@ -212,7 +217,7 @@ public sealed class QuestTextEditorForm : Form
         _okButton.Click += OnOkClick;
 
         _cancelButton.Text = "取消";
-        _cancelButton.Size = new Size(80, 34);
+        _cancelButton.Size = new Size(Scaled(80), Scaled(34));
         _cancelButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _cancelButton.FlatStyle = FlatStyle.Flat;
         _cancelButton.Cursor = Cursors.Hand;
@@ -233,9 +238,9 @@ public sealed class QuestTextEditorForm : Form
         _splitContainer.Dock = DockStyle.Fill;
         _splitContainer.Orientation = Orientation.Horizontal;
         _splitContainer.BackColor = WindowBg;
-        _splitContainer.SplitterWidth = 6;
-        _splitContainer.Panel1MinSize = 160;
-        _splitContainer.Panel2MinSize = 120;
+        _splitContainer.SplitterWidth = Scaled(6);
+        _splitContainer.Panel1MinSize = Scaled(160);
+        _splitContainer.Panel2MinSize = Scaled(120);
 
         _splitContainer.Panel1.Controls.Add(_previewPanel);
         _splitContainer.Panel1.Controls.Add(previewLabel);
@@ -250,7 +255,7 @@ public sealed class QuestTextEditorForm : Form
         var bottomPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 50,
+            Height = Scaled(50),
             BackColor = WindowBg,
         };
         bottomPanel.Controls.AddRange([_okButton, _cancelButton]);
@@ -260,13 +265,13 @@ public sealed class QuestTextEditorForm : Form
         Controls.Add(_toolStrip);
     }
 
-    private static Label BuildSectionLabel(string text)
+    private Label BuildSectionLabel(string text)
     {
         return new Label
         {
             Text = text,
             Dock = DockStyle.Top,
-            Height = 28,
+            Height = Scaled(28),
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
             ForeColor = MutedTextColor,
@@ -342,7 +347,7 @@ public sealed class QuestTextEditorForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        _splitContainer.SplitterDistance = Math.Max(160, _splitContainer.Height * 3 / 5);
+        _splitContainer.SplitterDistance = Math.Max(Scaled(160), _splitContainer.Height * 3 / 5);
         PositionButtons();
     }
 
@@ -356,7 +361,19 @@ public sealed class QuestTextEditorForm : Form
     {
         if (_okButton.Parent is null || _cancelButton.Parent is null) return;
 
-        _okButton.Location = new Point(ClientSize.Width - 190, 8);
-        _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        _okButton.Location = new Point(ClientSize.Width - Scaled(190), Scaled(8));
+        _cancelButton.Location = new Point(ClientSize.Width - Scaled(96), Scaled(8));
+    }
+
+    private void ApplyDpiScaling()
+    {
+        _okButton.Size = new Size(Scaled(80), Scaled(34));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(34));
+        _statusLabel.Height = Scaled(26);
+        _splitContainer.SplitterWidth = Scaled(6);
+        _splitContainer.Panel1MinSize = Scaled(160);
+        _splitContainer.Panel2MinSize = Scaled(120);
+        _toolStrip.Padding = new Padding(Scaled(4), Scaled(2), Scaled(4), Scaled(2));
+        PositionButtons();
     }
 }

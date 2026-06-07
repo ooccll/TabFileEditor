@@ -18,12 +18,15 @@ public sealed class RichTextEditorForm : Form
     private static readonly Color MutedTextColor = Color.FromArgb(0x47, 0x55, 0x69);
     private static readonly Color ErrorTextColor = Color.FromArgb(0xB9, 0x1C, 0x1C);
 
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int pixels) => (int)Math.Round(pixels * DpiScale);
+
     public RichTextEditorForm(string markup, ElemSchemeLoader loader)
     {
         _document = RichTextMarkup.Parse(markup);
 
         Text = "富文本编辑器";
-        Size = new Size(786, 900);
+        Size = new Size(Scaled(786), Scaled(900));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
@@ -45,6 +48,8 @@ public sealed class RichTextEditorForm : Form
 
         UpdateMarkupTextFromDocument();
         UpdateValidationState(null);
+
+        DpiChanged += (_, _) => ApplyDpiScaling();
     }
 
     private void BuildMarkupTextBox()
@@ -64,7 +69,7 @@ public sealed class RichTextEditorForm : Form
     private void BuildStatusLabel()
     {
         _statusLabel.Dock = DockStyle.Bottom;
-        _statusLabel.Height = 26;
+        _statusLabel.Height = Scaled(26);
         _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
         _statusLabel.ForeColor = MutedTextColor;
         _statusLabel.BackColor = WindowBg;
@@ -73,7 +78,7 @@ public sealed class RichTextEditorForm : Form
     private void BuildButtons()
     {
         _okButton.Text = "确定";
-        _okButton.Size = new Size(80, 34);
+        _okButton.Size = new Size(Scaled(80), Scaled(34));
         _okButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _okButton.BackColor = AccentColor;
         _okButton.ForeColor = Color.White;
@@ -83,7 +88,7 @@ public sealed class RichTextEditorForm : Form
         _okButton.Click += OnOkClick;
 
         _cancelButton.Text = "取消";
-        _cancelButton.Size = new Size(80, 34);
+        _cancelButton.Size = new Size(Scaled(80), Scaled(34));
         _cancelButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _cancelButton.FlatStyle = FlatStyle.Flat;
         _cancelButton.Cursor = Cursors.Hand;
@@ -104,9 +109,9 @@ public sealed class RichTextEditorForm : Form
         _splitContainer.Dock = DockStyle.Fill;
         _splitContainer.Orientation = Orientation.Horizontal;
         _splitContainer.BackColor = WindowBg;
-        _splitContainer.SplitterWidth = 6;
-        _splitContainer.Panel1MinSize = 160;
-        _splitContainer.Panel2MinSize = 120;
+        _splitContainer.SplitterWidth = Scaled(6);
+        _splitContainer.Panel1MinSize = Scaled(160);
+        _splitContainer.Panel2MinSize = Scaled(120);
 
         _splitContainer.Panel1.Controls.Add(_previewPanel);
         _splitContainer.Panel1.Controls.Add(previewLabel);
@@ -121,7 +126,7 @@ public sealed class RichTextEditorForm : Form
         var bottomPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 50,
+            Height = Scaled(50),
             BackColor = WindowBg,
         };
         bottomPanel.Controls.AddRange([_okButton, _cancelButton]);
@@ -130,13 +135,13 @@ public sealed class RichTextEditorForm : Form
         Controls.Add(bottomPanel);
     }
 
-    private static Label BuildSectionLabel(string text)
+    private Label BuildSectionLabel(string text)
     {
         return new Label
         {
             Text = text,
             Dock = DockStyle.Top,
-            Height = 28,
+            Height = Scaled(28),
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
             ForeColor = MutedTextColor,
@@ -210,7 +215,7 @@ public sealed class RichTextEditorForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        _splitContainer.SplitterDistance = Math.Max(160, _splitContainer.Height * 2 / 3);
+        _splitContainer.SplitterDistance = Math.Max(Scaled(160), _splitContainer.Height * 2 / 3);
         PositionButtons();
     }
 
@@ -224,7 +229,18 @@ public sealed class RichTextEditorForm : Form
     {
         if (_okButton.Parent is null || _cancelButton.Parent is null) return;
 
-        _okButton.Location = new Point(ClientSize.Width - 190, 8);
-        _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        _okButton.Location = new Point(ClientSize.Width - Scaled(190), Scaled(8));
+        _cancelButton.Location = new Point(ClientSize.Width - Scaled(96), Scaled(8));
+    }
+
+    private void ApplyDpiScaling()
+    {
+        _okButton.Size = new Size(Scaled(80), Scaled(34));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(34));
+        _statusLabel.Height = Scaled(26);
+        _splitContainer.SplitterWidth = Scaled(6);
+        _splitContainer.Panel1MinSize = Scaled(160);
+        _splitContainer.Panel2MinSize = Scaled(120);
+        PositionButtons();
     }
 }

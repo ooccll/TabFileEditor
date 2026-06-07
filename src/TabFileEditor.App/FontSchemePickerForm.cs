@@ -16,6 +16,9 @@ public sealed class FontSchemePickerForm : Form
 
     public int SelectedFontSchemeId { get; private set; }
 
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int pixels) => (int)Math.Round(pixels * DpiScale);
+
     public FontSchemePickerForm(ElemSchemeLoader loader, int currentFontSchemeId)
     {
         _loader = loader;
@@ -25,7 +28,7 @@ public sealed class FontSchemePickerForm : Form
         SelectedFontSchemeId = currentFontSchemeId;
 
         Text = "选择字体方案";
-        Size = new Size(700, 600);
+        Size = new Size(Scaled(700), Scaled(600));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
@@ -33,6 +36,8 @@ public sealed class FontSchemePickerForm : Form
         ShowInTaskbar = false;
 
         BuildUi();
+
+        DpiChanged += (_, _) => ApplyDpiScaling();
     }
 
     private void BuildUi()
@@ -40,12 +45,12 @@ public sealed class FontSchemePickerForm : Form
         var searchLabel = new Label
         {
             Text = "搜索:",
-            Location = new Point(12, 14),
+            Location = new Point(Scaled(12), Scaled(14)),
             AutoSize = true,
         };
 
-        _searchBox.Location = new Point(56, 10);
-        _searchBox.Size = new Size(612, 28);
+        _searchBox.Location = new Point(Scaled(56), Scaled(10));
+        _searchBox.Size = new Size(Scaled(612), Scaled(28));
         _searchBox.TextChanged += (_, _) => ApplyFilter();
 
         _grid.Dock = DockStyle.Fill;
@@ -110,26 +115,26 @@ public sealed class FontSchemePickerForm : Form
         });
 
         _previewPanel.Dock = DockStyle.Bottom;
-        _previewPanel.Height = 60;
+        _previewPanel.Height = Scaled(60);
         _previewPanel.BackColor = Color.FromArgb(0x1A, 0x1A, 0x2E);
         _previewPanel.Paint += PreviewPanelPaint;
 
         var bottomPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 50,
+            Height = Scaled(50),
         };
 
         _okButton.Text = "确定";
-        _okButton.Size = new Size(80, 34);
-        _okButton.Location = new Point(ClientSize.Width - 190, 8);
+        _okButton.Size = new Size(Scaled(80), Scaled(34));
+        _okButton.Location = new Point(ClientSize.Width - Scaled(190), Scaled(8));
         _okButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _okButton.DialogResult = DialogResult.OK;
         _okButton.Click += (_, _) => AcceptSelection();
 
         _cancelButton.Text = "取消";
-        _cancelButton.Size = new Size(80, 34);
-        _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        _cancelButton.Size = new Size(Scaled(80), Scaled(34));
+        _cancelButton.Location = new Point(ClientSize.Width - Scaled(96), Scaled(8));
         _cancelButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _cancelButton.DialogResult = DialogResult.Cancel;
 
@@ -138,7 +143,7 @@ public sealed class FontSchemePickerForm : Form
         var topPanel = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 40,
+            Height = Scaled(40),
         };
         topPanel.Controls.AddRange([searchLabel, _searchBox]);
 
@@ -246,7 +251,7 @@ public sealed class FontSchemePickerForm : Form
         using (font)
         {
             var text = $"方案 {entry.Id} — 示例文字 AaBbCc 123";
-            var x = 12f;
+            var x = (float)Scaled(12);
             var y = (_previewPanel.Height - font.Height) / 2f;
 
             if (spec.ShadowSize > 0)
@@ -272,9 +277,23 @@ public sealed class FontSchemePickerForm : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
-        if (_okButton is not null)
-            _okButton.Location = new Point(ClientSize.Width - 190, 8);
-        if (_cancelButton is not null)
-            _cancelButton.Location = new Point(ClientSize.Width - 96, 8);
+        PositionButtons();
+    }
+
+    private void PositionButtons()
+    {
+        if (_okButton is null || _cancelButton is null) return;
+        _okButton.Location = new Point(ClientSize.Width - Scaled(190), Scaled(8));
+        _cancelButton.Location = new Point(ClientSize.Width - Scaled(96), Scaled(8));
+    }
+
+    private void ApplyDpiScaling()
+    {
+        _okButton.Size = new Size(Scaled(80), Scaled(34));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(34));
+        _searchBox.Location = new Point(Scaled(56), Scaled(10));
+        _searchBox.Size = new Size(Scaled(612), Scaled(28));
+        _previewPanel.Height = Scaled(60);
+        PositionButtons();
     }
 }
