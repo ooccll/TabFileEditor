@@ -117,7 +117,6 @@ public sealed class MainForm : Form
     {
         var menuStrip = new MenuStrip
         {
-            Dock = DockStyle.Top,
             BackColor = SystemColors.MenuBar,
         };
 
@@ -134,22 +133,24 @@ public sealed class MainForm : Form
         helpMenu.DropDownItems.Add(new ToolStripMenuItem("关于...", null, OnMenuAbout));
 
         menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, helpMenu });
-        Controls.Add(menuStrip);
-        MainMenuStrip = menuStrip;
+        menuStrip.Dock = DockStyle.Fill;
 
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
             BackColor = WindowBg,
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, TopBarHeight));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, ColumnBarHeight));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, BottomBarHeight));
+        root.Controls.Add(menuStrip, 0, 0);
         Controls.Add(root);
+        MainMenuStrip = menuStrip;
 
         BuildFileBar(root);
         BuildSearchBar(root);
@@ -174,7 +175,7 @@ public sealed class MainForm : Form
         fileBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         fileBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         fileBar.Paint += DrawPanelBorder;
-        root.Controls.Add(fileBar, 0, 0);
+        root.Controls.Add(fileBar, 0, 1);
 
         fileBar.Controls.Add(BuildLabel("表格文件"), 0, 0);
 
@@ -206,7 +207,7 @@ public sealed class MainForm : Form
         };
         searchBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         searchBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(searchBar, 0, 1);
+        root.Controls.Add(searchBar, 0, 2);
 
         _rowSearchTextBox.Name = "RowSearchTextBox";
         _rowSearchTextBox.Dock = DockStyle.Fill;
@@ -225,7 +226,7 @@ public sealed class MainForm : Form
         _splitContainer.BackColor = WindowBg;
         _splitContainer.FixedPanel = FixedPanel.Panel1;
         _splitContainer.Padding = new Padding(Scaled(10), 0, Scaled(10), Scaled(8));
-        root.Controls.Add(_splitContainer, 0, 2);
+        root.Controls.Add(_splitContainer, 0, 3);
 
         BuildRowListPanel();
         ConfigureDetailGrid();
@@ -1138,7 +1139,7 @@ public sealed class MainForm : Form
         bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, OpenTableDirectoryButtonWidth));
         bottomBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, SaveButtonWidth));
         bottomBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(bottomBar, 0, 3);
+        root.Controls.Add(bottomBar, 0, 4);
 
         var statusStrip = new StatusStrip
         {
