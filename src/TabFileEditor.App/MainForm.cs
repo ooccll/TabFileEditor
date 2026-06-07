@@ -1651,7 +1651,7 @@ public sealed class MainForm : Form
             Name = "Value",
             HeaderText = "值",
             AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            MinimumWidth = 180,
+            MinimumWidth = Scaled(180),
             ReadOnly = false,
             SortMode = DataGridViewColumnSortMode.NotSortable,
         };
@@ -1660,14 +1660,14 @@ public sealed class MainForm : Form
         ApplyDetailGridColumnWidths();
     }
 
-    private static DataGridViewTextBoxColumn BuildReadOnlyTextColumn(string name, string headerText, int width)
+    private DataGridViewTextBoxColumn BuildReadOnlyTextColumn(string name, string headerText, int width)
     {
         return new DataGridViewTextBoxColumn
         {
             Name = name,
             HeaderText = headerText,
-            Width = width,
-            MinimumWidth = Math.Min(width, 120),
+            Width = Scaled(width),
+            MinimumWidth = Scaled(Math.Min(width, 120)),
             ReadOnly = true,
             SortMode = DataGridViewColumnSortMode.NotSortable,
             DefaultCellStyle = { BackColor = ReadOnlyCellBg },
