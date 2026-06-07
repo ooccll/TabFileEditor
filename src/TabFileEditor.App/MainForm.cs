@@ -113,17 +113,6 @@ public sealed class MainForm : Form
         base.OnFormClosing(e);
     }
 
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-    {
-        if (keyData == (Keys.Control | Keys.S))
-        {
-            SaveCurrentFile(showSuccessMessage: false);
-            return true;
-        }
-
-        return base.ProcessCmdKey(ref msg, keyData);
-    }
-
     private void BuildUi()
     {
         var menuStrip = new MenuStrip
@@ -1177,7 +1166,16 @@ public sealed class MainForm : Form
 
     private void OnMenuSaveFile(object? sender, EventArgs e) => SaveCurrentFile(showSuccessMessage: false);
 
-    private void OnMenuUndo(object? sender, EventArgs e) => UndoLastDetailChange();
+    private void OnMenuUndo(object? sender, EventArgs e)
+    {
+        var editor = _detailGrid.GetExpandedEditor?.Invoke();
+        if (editor is { Visible: true })
+        {
+            editor.Undo();
+            return;
+        }
+        UndoLastDetailChange();
+    }
 
     private void OnMenuCopy(object? sender, EventArgs e)
     {
