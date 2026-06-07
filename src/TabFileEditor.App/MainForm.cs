@@ -1148,6 +1148,7 @@ public sealed class MainForm : Form
             Margin = new Padding(0),
             Padding = Padding.Empty,
             BackColor = WindowBg,
+            Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point),
         };
         _statusLabel.Spring = true;
         _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
