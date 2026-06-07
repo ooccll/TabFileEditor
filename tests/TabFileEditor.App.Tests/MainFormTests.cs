@@ -1483,8 +1483,9 @@ public sealed class MainFormTests : IDisposable
                 detailGrid,
                 new DataGridViewCellEventArgs(valueColumnIndex, activityExplainRowIndex));
 
-            Assert.True(FindExpandedValueEditorTextBox(form).Visible);
-            Assert.DoesNotContain(FindDescendants<Button>(form), button => button.Text == "设置" && button.Visible);
+            // Double-clicking a rich text field now opens the rich text editor directly
+            // (not the expanded value editor), so the expanded editor should NOT be visible
+            Assert.False(FindExpandedValueEditorTextBox(form).Visible);
         });
     }
 

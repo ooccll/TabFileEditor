@@ -615,6 +615,8 @@ public sealed class MainForm : Form
         "szActivityExplain",
     };
 
+    private bool _currentCellIsQuestText;
+
     private void ConfigureTimeFieldButton()
     {
         _timeFieldButton.Text = "设置";
@@ -662,7 +664,13 @@ public sealed class MainForm : Form
         _richTextButton.AutoSizeMode = AutoSizeMode.GrowOnly;
         _richTextButton.MinimumSize = new Size(50, Scaled(DetailGridRowHeight));
         _richTextButton.Cursor = Cursors.Hand;
-        _richTextButton.Click += (_, _) => OpenRichTextEditorDialog();
+        _richTextButton.Click += (_, _) =>
+        {
+            if (_currentCellIsQuestText)
+                OpenQuestTextEditorDialog();
+            else
+                OpenRichTextEditorDialog();
+        };
         _detailGrid.Controls.Add(_richTextButton);
     }
 
@@ -827,13 +835,17 @@ public sealed class MainForm : Form
         var columnTitle = _document.Columns[tableColumnIndex].Title;
         var cellValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
 
-        if (!RichTextFieldNames.Contains(columnTitle) &&
-            !RichTextMarkup.LooksLikeRichText(cellValue))
+        var isRichText = RichTextFieldNames.Contains(columnTitle) ||
+                         RichTextMarkup.LooksLikeRichText(cellValue);
+        var isQuestText = !isRichText && QuestTextParser.LooksLikeQuestText(cellValue);
+
+        if (!isRichText && !isQuestText)
         {
             HideRichTextButton();
             return;
         }
 
+        _currentCellIsQuestText = isQuestText;
         ShowRichTextButton(currentCell.RowIndex);
     }
 
@@ -936,6 +948,59 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             MessageBox.Show(this, $"富文本编辑器错误：\n\n{ex.Message}\n\n{ex.StackTrace}",
+                "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OpenQuestTextEditorDialog()
+    {
+        if (_document is null ||
+            _detailGrid.CurrentCell is not { RowIndex: >= 0, ColumnIndex: >= 0 } currentCell ||
+            _detailGrid.Columns[currentCell.ColumnIndex].Name != "Value" ||
+            _detailGrid.Rows[currentCell.RowIndex].Tag is not int tableColumnIndex ||
+            _rowListBox.SelectedItem is not RowListItem selectedItem)
+        {
+            return;
+        }
+
+        var loader = GetElemSchemeLoader();
+        if (loader is null)
+        {
+            MessageBox.Show(this, $"无法从表格路径推导出 Elem 配置目录。\n表格路径：{_document.Path}",
+                "路径错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var currentValue = TabTableDocument.GetCellValue(selectedItem.Row, tableColumnIndex);
+
+        try
+        {
+            using var form = new QuestTextEditorForm(currentValue, loader);
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var newValue = form.ResultTagText;
+            var oldValue = currentValue.Trim();
+            if (newValue == oldValue)
+            {
+                return;
+            }
+
+            _document.SetCellValue(selectedItem.Row, tableColumnIndex, newValue);
+            _detailGrid.Rows[currentCell.RowIndex].Cells[currentCell.ColumnIndex].Value = newValue;
+            PushUndoAction(new DetailUndoAction(
+                selectedItem.Row,
+                [new DetailUndoCell(currentCell.RowIndex, tableColumnIndex, oldValue)]));
+            _isDirty = true;
+            UpdateActionButtons();
+            RenderRows(selectFirstWhenAvailable: true, preferredRow: selectedItem.Row);
+            SetStatus("存在未保存修改。");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"任务文本编辑器错误：\n\n{ex.Message}\n\n{ex.StackTrace}",
                 "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -1742,6 +1807,18 @@ public sealed class MainForm : Form
         }
 
         _detailGrid.CurrentCell = _detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+        UpdateRichTextButtonVisibility();
+
+        // If the rich text / quest text button is visible, open the appropriate editor
+        if (_richTextButton.Visible)
+        {
+            if (_currentCellIsQuestText)
+                OpenQuestTextEditorDialog();
+            else
+                OpenRichTextEditorDialog();
+            return;
+        }
+
         ShowExpandedValueEditor(e.RowIndex, e.ColumnIndex);
     }
 
