@@ -126,6 +126,28 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
+        var menuStrip = new MenuStrip
+        {
+            Dock = DockStyle.Top,
+            BackColor = SystemColors.MenuBar,
+        };
+
+        var fileMenu = new ToolStripMenuItem("文件(&F)");
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("打开...", null, OnMenuOpenFile) { ShortcutKeys = Keys.Control | Keys.O });
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("保存", null, OnMenuSaveFile) { ShortcutKeys = Keys.Control | Keys.S });
+
+        var editMenu = new ToolStripMenuItem("操作(&O)");
+        editMenu.DropDownItems.Add(new ToolStripMenuItem("撤销", null, OnMenuUndo) { ShortcutKeys = Keys.Control | Keys.Z });
+        editMenu.DropDownItems.Add(new ToolStripMenuItem("复制", null, OnMenuCopy) { ShortcutKeyDisplayString = "Ctrl+C" });
+        editMenu.DropDownItems.Add(new ToolStripMenuItem("粘贴", null, OnMenuPaste) { ShortcutKeyDisplayString = "Ctrl+V" });
+
+        var helpMenu = new ToolStripMenuItem("帮助(&H)");
+        helpMenu.DropDownItems.Add(new ToolStripMenuItem("关于...", null, OnMenuAbout));
+
+        menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, helpMenu });
+        Controls.Add(menuStrip);
+        MainMenuStrip = menuStrip;
+
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -1149,6 +1171,41 @@ public sealed class MainForm : Form
         ConfigureButton(_saveButton, "保存", accent: true);
         _saveButton.Click += (_, _) => SaveCurrentFile(showSuccessMessage: true);
         bottomBar.Controls.Add(_saveButton, 2, 0);
+    }
+
+    private void OnMenuOpenFile(object? sender, EventArgs e) => BrowseFile();
+
+    private void OnMenuSaveFile(object? sender, EventArgs e) => SaveCurrentFile(showSuccessMessage: false);
+
+    private void OnMenuUndo(object? sender, EventArgs e) => UndoLastDetailChange();
+
+    private void OnMenuCopy(object? sender, EventArgs e)
+    {
+        var editor = _detailGrid.GetExpandedEditor?.Invoke();
+        if (editor is { Visible: true } && !string.IsNullOrEmpty(editor.SelectedText))
+        {
+            Clipboard.SetText(editor.SelectedText);
+            return;
+        }
+        var data = _detailGrid.GetClipboardContent();
+        if (data != null)
+        {
+            Clipboard.SetDataObject(data);
+        }
+    }
+
+    private void OnMenuPaste(object? sender, EventArgs e)
+    {
+        var editor = _detailGrid.GetExpandedEditor?.Invoke();
+        if (editor is { Visible: true })
+        {
+            editor.Paste();
+        }
+    }
+
+    private void OnMenuAbout(object? sender, EventArgs e)
+    {
+        MessageBox.Show(this, "张育铭", "关于");
     }
 
     private void BrowseFile()
