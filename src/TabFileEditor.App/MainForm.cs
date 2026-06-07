@@ -22,6 +22,9 @@ public sealed class MainForm : Form
     private const int SaveButtonWidth = 172;
     private const int OpenTableDirectoryButtonWidth = 188;
 
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int pixels) => (int)Math.Round(pixels * DpiScale);
+
     private static readonly Color WindowBg = ColorTranslator.FromHtml("#F6F8FB");
     private static readonly Color PanelBg = Color.White;
     private static readonly Color BorderColor = ColorTranslator.FromHtml("#D7DEE8");
@@ -42,6 +45,7 @@ public sealed class MainForm : Form
     private readonly Button _reloadButton = new();
     private readonly ComboBox _displayColumnComboBox = new();
     private readonly SplitContainer _splitContainer = new();
+    private readonly TableLayoutPanel _rowListPanel = new();
     private readonly TextBox _rowSearchTextBox = new();
     private readonly ListBox _rowListBox = new();
     private readonly DetailDataGridView _detailGrid = new();
@@ -84,6 +88,7 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(DefaultWindowWidth, DefaultWindowHeight);
         Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+        DpiChanged += (_, _) => ApplyLeftPanelDpiScaling();
 
         BuildUi();
         SetStatus("请选择要打开的 tab 表格文件。");
@@ -194,8 +199,8 @@ public sealed class MainForm : Form
 
         _rowSearchTextBox.Name = "RowSearchTextBox";
         _rowSearchTextBox.Dock = DockStyle.Fill;
-        _rowSearchTextBox.Height = SearchControlHeight;
-        _rowSearchTextBox.Margin = new Padding(0, 2, 0, 2);
+        _rowSearchTextBox.Height = Scaled(SearchControlHeight);
+        _rowSearchTextBox.Margin = new Padding(0, Scaled(2), 0, Scaled(2));
         _rowSearchTextBox.BorderStyle = BorderStyle.FixedSingle;
         _rowSearchTextBox.PlaceholderText = "搜索内容，可用空格隔开多个关键字";
         _rowSearchTextBox.TextChanged += (_, _) => RowSearchTextBoxTextChanged();
@@ -208,7 +213,7 @@ public sealed class MainForm : Form
         _splitContainer.Dock = DockStyle.Fill;
         _splitContainer.BackColor = WindowBg;
         _splitContainer.FixedPanel = FixedPanel.Panel1;
-        _splitContainer.Padding = new Padding(10, 0, 10, 8);
+        _splitContainer.Padding = new Padding(Scaled(10), 0, Scaled(10), Scaled(8));
         root.Controls.Add(_splitContainer, 0, 2);
 
         BuildRowListPanel();
@@ -218,21 +223,18 @@ public sealed class MainForm : Form
 
     private void BuildRowListPanel()
     {
-        var rowListPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
-            BackColor = WindowBg,
-            Margin = new Padding(0),
-        };
-        rowListPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        rowListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        rowListPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        rowListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        _splitContainer.Panel1.Controls.Add(rowListPanel);
+        _rowListPanel.Dock = DockStyle.Fill;
+        _rowListPanel.ColumnCount = 1;
+        _rowListPanel.RowCount = 3;
+        _rowListPanel.BackColor = WindowBg;
+        _rowListPanel.Margin = new Padding(0);
+        _rowListPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _rowListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, Scaled(38)));
+        _rowListPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _rowListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, Scaled(42)));
+        _splitContainer.Panel1.Controls.Add(_rowListPanel);
 
-        rowListPanel.Controls.Add(BuildDisplayColumnPanel(), 0, 0);
+        _rowListPanel.Controls.Add(BuildDisplayColumnPanel(), 0, 0);
 
         _rowListBox.Dock = DockStyle.Fill;
         _rowListBox.Margin = Padding.Empty;
@@ -246,7 +248,7 @@ public sealed class MainForm : Form
             UpdateActionButtons();
         };
         _rowListBox.MouseDoubleClick += (_, _) => RowListBoxMouseDoubleClick();
-        rowListPanel.Controls.Add(_rowListBox, 0, 1);
+        _rowListPanel.Controls.Add(_rowListBox, 0, 1);
 
         var insertItem = new ToolStripMenuItem("在下方插入");
         insertItem.Click += (_, _) => InsertRowBelow();
@@ -262,7 +264,7 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Margin = new Padding(0, 4, 0, 0),
+            Margin = new Padding(0, Scaled(4), 0, 0),
             Padding = Padding.Empty,
             BackColor = WindowBg,
         };
@@ -275,7 +277,7 @@ public sealed class MainForm : Form
         _insertRowButton.Dock = DockStyle.Fill;
         _insertRowButton.Margin = Padding.Empty;
         _insertRowButton.TextAlign = ContentAlignment.MiddleCenter;
-        _insertRowButton.Padding = new Padding(4, 0, 4, 0);
+        _insertRowButton.Padding = new Padding(Scaled(4), 0, Scaled(4), 0);
         _insertRowButton.Click += (_, _) => InsertRowBelow();
         buttonPanel.Controls.Add(_insertRowButton, 0, 0);
 
@@ -284,11 +286,11 @@ public sealed class MainForm : Form
         _deleteRowButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         _deleteRowButton.Dock = DockStyle.Left;
         _deleteRowButton.TextAlign = ContentAlignment.MiddleCenter;
-        _deleteRowButton.Padding = new Padding(4, 0, 4, 0);
+        _deleteRowButton.Padding = new Padding(Scaled(4), 0, Scaled(4), 0);
         _deleteRowButton.Click += (_, _) => DeleteSelectedRow();
         buttonPanel.Controls.Add(_deleteRowButton, 1, 0);
 
-        rowListPanel.Controls.Add(buttonPanel, 0, 2);
+        _rowListPanel.Controls.Add(buttonPanel, 0, 2);
     }
 
     private TableLayoutPanel BuildDisplayColumnPanel()
@@ -299,9 +301,9 @@ public sealed class MainForm : Form
             ColumnCount = 2,
             RowCount = 1,
             BackColor = WindowBg,
-            Margin = new Padding(0, 0, 0, 6),
+            Margin = new Padding(0, 0, 0, Scaled(6)),
         };
-        displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
+        displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Scaled(78)));
         displayColumnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         displayColumnPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -310,7 +312,7 @@ public sealed class MainForm : Form
         _displayColumnComboBox.Name = "DisplayColumnComboBox";
         _displayColumnComboBox.Dock = DockStyle.Fill;
         _displayColumnComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        _displayColumnComboBox.Margin = new Padding(0, 2, 0, 2);
+        _displayColumnComboBox.Margin = new Padding(0, Scaled(2), 0, Scaled(2));
         _displayColumnComboBox.Enabled = false;
         _displayColumnComboBox.SelectedIndexChanged += (_, _) => DisplayColumnComboBoxSelectedIndexChanged();
         displayColumnPanel.Controls.Add(_displayColumnComboBox, 1, 0);
@@ -2704,8 +2706,8 @@ public sealed class MainForm : Form
             return;
         }
 
-        const int panel1MinSize = 260;
-        const int panel2MinSize = 260;
+        var panel1MinSize = Scaled(260);
+        var panel2MinSize = Scaled(260);
         if (_splitContainer.Width < panel1MinSize + panel2MinSize)
         {
             return;
@@ -2713,8 +2715,23 @@ public sealed class MainForm : Form
 
         _splitContainer.Panel1MinSize = panel1MinSize;
         _splitContainer.Panel2MinSize = panel2MinSize;
-        _splitContainer.SplitterDistance = Math.Min(340, _splitContainer.Width - panel2MinSize);
+        _splitContainer.SplitterDistance = Math.Min(Scaled(340), _splitContainer.Width - panel2MinSize);
         _splitterInitialized = true;
+    }
+
+    private void ApplyLeftPanelDpiScaling()
+    {
+        var panel1MinSize = Scaled(260);
+        var panel2MinSize = Scaled(260);
+        _splitContainer.Panel1MinSize = panel1MinSize;
+        _splitContainer.Panel2MinSize = panel2MinSize;
+        if (_splitContainer.Width >= panel1MinSize + panel2MinSize)
+        {
+            _splitContainer.SplitterDistance = Math.Min(Scaled(340), _splitContainer.Width - panel2MinSize);
+        }
+
+        _rowListPanel.RowStyles[0] = new RowStyle(SizeType.Absolute, Scaled(38));
+        _rowListPanel.RowStyles[2] = new RowStyle(SizeType.Absolute, Scaled(42));
     }
 
     private bool ConfirmDiscardDirtyChanges(string message)
