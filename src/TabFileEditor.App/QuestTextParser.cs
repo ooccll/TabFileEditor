@@ -291,24 +291,109 @@ public sealed class QuestTextDocument
         var safeEnd = Math.Clamp(start + length, safeStart, buf.Count);
         if (safeEnd <= safeStart) return;
 
-        // Extract text from the range, apply font, rebuild
-        var sb = new StringBuilder();
+        // Check if there are any editable characters in the range
+        var hasEditable = false;
         for (var i = safeStart; i < safeEnd; i++)
         {
-            var ch = buf[i].Ch;
-            if (ch != IndentMarker && ch != PlayerNameMarker && ch != FactionTitleMarker &&
-                ch != LineHeightMarker && ch != IconMarker && ch != MoneyMarker &&
-                ch != ReservedAMarker && ch != ReservedATMarker && ch != ReservedSDMarker && ch != ReservedWTMarker)
+            if (IsEditableBufferChar(buf[i].Ch))
             {
-                sb.Append(ch);
+                hasEditable = true;
+                break;
+            }
+        }
+        if (!hasEditable) return;
+
+        // Split nodes at selection boundaries so edges are clean
+        SplitNodeAtBufferOffset(safeStart);
+        SplitNodeAtBufferOffset(safeEnd);
+
+        // Rebuild buffer after splits
+        MarkBufferDirty();
+        buf = Buffer;
+
+        // Collect editable node indices within the selection
+        var affectedNodeIndices = new HashSet<int>();
+        for (var i = safeStart; i < safeEnd; i++)
+        {
+            if (IsEditableBufferChar(buf[i].Ch))
+                affectedNodeIndices.Add(buf[i].NodeIndex);
+        }
+
+        // Change font of affected editable nodes
+        for (var ni = 0; ni < Nodes.Count; ni++)
+        {
+            if (!affectedNodeIndices.Contains(ni)) continue;
+            var node = Nodes[ni];
+            switch (node)
+            {
+                case QuestTextNode.TextRun tr:
+                    Nodes[ni] = fontSchemeId == DefaultFontSchemeId
+                        ? tr with { FontSchemeId = fontSchemeId }
+                        : new QuestTextNode.FontBlock(tr.Text, fontSchemeId);
+                    break;
+                case QuestTextNode.FontBlock fb:
+                    Nodes[ni] = fontSchemeId == DefaultFontSchemeId
+                        ? new QuestTextNode.TextRun(fb.Text, fontSchemeId)
+                        : fb with { FontSchemeId = fontSchemeId };
+                    break;
             }
         }
 
-        if (sb.Length == 0) return;
+        NormalizeInPlace();
+        MarkBufferDirty();
+    }
 
-        // Remove the original range and insert a FontBlock
-        DeleteRange(safeStart, safeEnd - safeStart);
-        InsertNode(safeStart, new QuestTextNode.FontBlock(sb.ToString(), fontSchemeId));
+    private static bool IsEditableBufferChar(char ch)
+    {
+        return ch != IndentMarker && ch != PlayerNameMarker && ch != FactionTitleMarker &&
+               ch != LineHeightMarker && ch != IconMarker && ch != MoneyMarker &&
+               ch != ReservedAMarker && ch != ReservedATMarker && ch != ReservedSDMarker && ch != ReservedWTMarker &&
+               ch != '\n';
+    }
+
+    private void SplitNodeAtBufferOffset(int offset)
+    {
+        if (offset <= 0) return;
+        var buf = Buffer;
+        if (offset >= buf.Count) return;
+
+        var nodeIndex = buf[offset].NodeIndex;
+        var nodeStart = FindNodeStart(nodeIndex);
+
+        // Already at a node boundary — no split needed
+        if (offset == nodeStart) return;
+
+        var node = Nodes[nodeIndex];
+        switch (node)
+        {
+            case QuestTextNode.TextRun tr:
+            {
+                var charInNode = offset - nodeStart;
+                var before = tr.Text[..charInNode];
+                var after = tr.Text[charInNode..];
+                Nodes.RemoveAt(nodeIndex);
+                if (after.Length > 0)
+                    Nodes.Insert(nodeIndex, new QuestTextNode.TextRun(after, tr.FontSchemeId));
+                if (before.Length > 0)
+                    Nodes.Insert(nodeIndex, new QuestTextNode.TextRun(before, tr.FontSchemeId));
+                break;
+            }
+            case QuestTextNode.FontBlock fb:
+            {
+                var charInNode = offset - nodeStart;
+                var before = fb.Text[..charInNode];
+                var after = fb.Text[charInNode..];
+                Nodes.RemoveAt(nodeIndex);
+                if (after.Length > 0)
+                    Nodes.Insert(nodeIndex, new QuestTextNode.FontBlock(after, fb.FontSchemeId));
+                if (before.Length > 0)
+                    Nodes.Insert(nodeIndex, new QuestTextNode.FontBlock(before, fb.FontSchemeId));
+                break;
+            }
+            // Non-editable nodes cannot be split
+        }
+
+        MarkBufferDirty();
     }
 
     // ── Internal helpers ──

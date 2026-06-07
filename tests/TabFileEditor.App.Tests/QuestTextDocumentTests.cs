@@ -222,6 +222,56 @@ public sealed class QuestTextDocumentTests
     }
 
     [Fact]
+    public void ApplyFontInMiddleOfTextRun()
+    {
+        var doc = new QuestTextDocument([
+            new QuestTextNode.TextRun("Hello World", 18)
+        ]);
+        doc.ApplyFont(3, 5, 171); // "lo Wo" -> F171
+        var serialized = QuestTextParser.Serialize(doc);
+        Assert.Equal("Hel<F171 lo Wo>rld", serialized);
+    }
+
+    [Fact]
+    public void ApplyFontPreservesCharCount()
+    {
+        var doc = new QuestTextDocument([
+            new QuestTextNode.TextRun("Hello World", 18)
+        ]);
+        var charCountBefore = doc.CharCount;
+        doc.ApplyFont(3, 5, 171);
+        Assert.Equal(charCountBefore, doc.CharCount);
+    }
+
+    [Fact]
+    public void ApplyFontOnAlreadyDifferentFont()
+    {
+        var doc = new QuestTextDocument([
+            new QuestTextNode.TextRun("Hello ", 18),
+            new QuestTextNode.FontBlock("World", 171)
+        ]);
+        doc.ApplyFont(6, 5, 200); // Change "World" font from 171 to 200
+        var serialized = QuestTextParser.Serialize(doc);
+        Assert.Equal("Hello <F200 World>", serialized);
+    }
+
+    [Fact]
+    public void ApplyFontAcrossMultipleNodesSkipsNonEditable()
+    {
+        var doc = new QuestTextDocument([
+            new QuestTextNode.TextRun("Hello", 18),
+            new QuestTextNode.PlayerName(),
+            new QuestTextNode.TextRun("World", 18)
+        ]);
+        // Select from offset 3 ("lo") through PlayerName to offset 9 ("d")
+        // Buffer: H(0), e(1), l(2), l(3), o(4), PN_Marker(5), 玩(6), 家(7), 名(8), W(9), o(10), r(11), l(12), d(13)
+        doc.ApplyFont(3, 7, 171); // selects "lo玩家名W"
+        var serialized = QuestTextParser.Serialize(doc);
+        // "lo" and "W" get font 171, PlayerName stays unchanged
+        Assert.Equal("Hel<F171 lo><N><F171 W>orld", serialized);
+    }
+
+    [Fact]
     public void GetNodeAtReturnsCorrectNode()
     {
         var doc = new QuestTextDocument([
