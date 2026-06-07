@@ -239,8 +239,6 @@ public sealed class QuestTextEditorForm : Form
         _splitContainer.Orientation = Orientation.Horizontal;
         _splitContainer.BackColor = WindowBg;
         _splitContainer.SplitterWidth = Scaled(6);
-        _splitContainer.Panel1MinSize = Scaled(160);
-        _splitContainer.Panel2MinSize = Scaled(120);
 
         _splitContainer.Panel1.Controls.Add(_previewPanel);
         _splitContainer.Panel1.Controls.Add(previewLabel);
@@ -347,6 +345,8 @@ public sealed class QuestTextEditorForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+        _splitContainer.Panel1MinSize = Scaled(160);
+        _splitContainer.Panel2MinSize = Scaled(120);
         _splitContainer.SplitterDistance = Math.Max(Scaled(160), _splitContainer.Height * 3 / 5);
         PositionButtons();
     }
