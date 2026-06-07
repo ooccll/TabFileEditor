@@ -144,10 +144,10 @@ public sealed class MainForm : Form
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, TopBarHeight));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, ColumnBarHeight));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, Scaled(TopBarHeight)));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, Scaled(ColumnBarHeight)));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, BottomBarHeight));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, Scaled(BottomBarHeight)));
         root.Controls.Add(menuStrip, 0, 0);
         Controls.Add(root);
         MainMenuStrip = menuStrip;
