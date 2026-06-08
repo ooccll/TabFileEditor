@@ -21,7 +21,7 @@ public sealed class DateTimePickerForm : Form
     public DateTimePickerForm(DateTime initialDateTime)
     {
         Text = "选择日期时间";
-        Size = new Size(Scaled(320), Scaled(200));
+        Size = new Size(Scaled(320), Scaled(180));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -78,7 +78,7 @@ public sealed class DateTimePickerForm : Form
 
     private void ApplyDpiScaling()
     {
-        Size = new Size(Scaled(320), Scaled(200));
+        Size = new Size(Scaled(320), Scaled(180));
         _datePicker.Location = new Point(Scaled(80), Scaled(22));
         _datePicker.Width = Scaled(200);
         _timePicker.Location = new Point(Scaled(80), Scaled(62));
