@@ -35,7 +35,7 @@ public sealed class QuestTextPreviewPanel : Panel
     {
         _loader = loader;
         DoubleBuffered = true;
-        BackColor = Color.FromArgb(0x1A, 0x1A, 0x1A);
+        BackColor = Color.FromArgb(0x1E, 0x1E, 0x1E);
         AutoScroll = true;
         TabStop = true;
         Cursor = Cursors.IBeam;
@@ -111,6 +111,7 @@ public sealed class QuestTextPreviewPanel : Panel
         base.OnPaint(e);
 
         var g = e.Graphics;
+        g.Clear(BackColor);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.AntiAlias;
         g.TranslateTransform(AutoScrollPosition.X, AutoScrollPosition.Y);
