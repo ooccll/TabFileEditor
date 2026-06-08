@@ -21,7 +21,7 @@ public sealed class DateTimePickerForm : Form
     public DateTimePickerForm(DateTime initialDateTime)
     {
         Text = "选择日期时间";
-        Size = new Size(Scaled(320), Scaled(240));
+        Size = new Size(Scaled(320), Scaled(200));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -55,13 +55,13 @@ public sealed class DateTimePickerForm : Form
 
         _okButton.Text = "确定";
         _okButton.DialogResult = DialogResult.OK;
-        _okButton.Location = new Point(Scaled(80), Scaled(110));
-        _okButton.Size = new Size(Scaled(80), Scaled(46));
+        _okButton.Location = new Point(Scaled(80), Scaled(100));
+        _okButton.Size = new Size(Scaled(80), Scaled(23));
 
         _cancelButton.Text = "取消";
         _cancelButton.DialogResult = DialogResult.Cancel;
-        _cancelButton.Location = new Point(Scaled(180), Scaled(110));
-        _cancelButton.Size = new Size(Scaled(80), Scaled(46));
+        _cancelButton.Location = new Point(Scaled(180), Scaled(100));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(23));
 
         Controls.AddRange(new Control[]
         {
@@ -78,14 +78,14 @@ public sealed class DateTimePickerForm : Form
 
     private void ApplyDpiScaling()
     {
-        Size = new Size(Scaled(320), Scaled(240));
+        Size = new Size(Scaled(320), Scaled(200));
         _datePicker.Location = new Point(Scaled(80), Scaled(22));
         _datePicker.Width = Scaled(200);
         _timePicker.Location = new Point(Scaled(80), Scaled(62));
         _timePicker.Width = Scaled(200);
-        _okButton.Location = new Point(Scaled(80), Scaled(110));
-        _okButton.Size = new Size(Scaled(80), Scaled(46));
-        _cancelButton.Location = new Point(Scaled(180), Scaled(110));
-        _cancelButton.Size = new Size(Scaled(80), Scaled(46));
+        _okButton.Location = new Point(Scaled(80), Scaled(100));
+        _okButton.Size = new Size(Scaled(80), Scaled(23));
+        _cancelButton.Location = new Point(Scaled(180), Scaled(100));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(23));
     }
 }
