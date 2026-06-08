@@ -22,7 +22,7 @@ public abstract record QuestTextNode
 
 public sealed class QuestTextDocument
 {
-    public const int DefaultFontSchemeId = 18;
+    public const int DefaultFontSchemeId = 160;
 
     public List<QuestTextNode> Nodes { get; private set; } = [];
 
