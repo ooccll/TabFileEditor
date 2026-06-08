@@ -75,6 +75,8 @@ public sealed class QuestTextPreviewPanel : Panel
         _selectionAnchor = _caretOffset;
         _verticalCaretTargetX = null;
         RaiseDocumentChanged();
+        Focus();
+        ScrollToCaret();
     }
 
     public void InsertNodeAtCaret(QuestTextNode node)
@@ -88,6 +90,8 @@ public sealed class QuestTextPreviewPanel : Panel
         _selectionAnchor = _caretOffset;
         _verticalCaretTargetX = null;
         RaiseDocumentChanged();
+        Focus();
+        ScrollToCaret();
     }
 
     public void ApplyFontAtSelection(int fontSchemeId)
@@ -825,6 +829,23 @@ public sealed class QuestTextPreviewPanel : Panel
     {
         Invalidate();
         DocumentChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ScrollToCaret()
+    {
+        if (_caretOffset < 0) return;
+        using var g = CreateGraphics();
+        var layout = LayoutDocument(g);
+        if (_caretOffset >= layout.CaretPositions.Count) return;
+
+        var caret = layout.CaretPositions[_caretOffset];
+        var visibleTop = -AutoScrollPosition.Y;
+        var visibleBottom = visibleTop + ClientSize.Height;
+
+        if (caret.Y < visibleTop)
+            AutoScrollPosition = new Point(0, (int)caret.Y - PaddingPx);
+        else if (caret.Y + caret.Height > visibleBottom)
+            AutoScrollPosition = new Point(0, (int)(caret.Y + caret.Height - ClientSize.Height + PaddingPx));
     }
 
     protected override void Dispose(bool disposing)
