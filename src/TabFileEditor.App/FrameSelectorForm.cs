@@ -11,6 +11,9 @@ public sealed class FrameSelectorForm : Form
 
     public int SelectedFrameIndex { get; private set; } = -1;
 
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int pixels) => (int)Math.Round(pixels * DpiScale);
+
     public FrameSelectorForm(UitexData data, Bitmap atlasImage, string displayTitle)
     {
         _data = data;
@@ -22,12 +25,12 @@ public sealed class FrameSelectorForm : Form
         MinimizeBox = false;
         ShowInTaskbar = false;
 
-        var statusHeight = 36;
+        var statusHeight = Scaled(36);
 
         ClientSize = new Size(atlasImage.Width, atlasImage.Height + statusHeight);
         AutoScroll = true;
 
-        _atlasPanel = new AtlasPanel(data, atlasImage)
+        _atlasPanel = new AtlasPanel(data, atlasImage, DpiScale)
         {
             Dock = DockStyle.Fill,
         };
@@ -39,10 +42,10 @@ public sealed class FrameSelectorForm : Form
             Dock = DockStyle.Bottom,
             Height = statusHeight,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Microsoft YaHei UI", 9F),
+            Font = new Font("Microsoft YaHei UI", 9F * DpiScale),
             ForeColor = Color.FromArgb(0x47, 0x55, 0x69),
             BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB),
-            Padding = new Padding(8, 0, 8, 0),
+            Padding = new Padding(Scaled(8), 0, Scaled(8), 0),
             Text = $"共 {data.FrameCount} 帧，点击选择帧",
         };
 
@@ -58,6 +61,17 @@ public sealed class FrameSelectorForm : Form
                 Close();
             }
         };
+
+        DpiChanged += (_, _) => ApplyDpiScaling();
+    }
+
+    private void ApplyDpiScaling()
+    {
+        var statusHeight = Scaled(36);
+        _statusLabel.Height = statusHeight;
+        _statusLabel.Font = new Font("Microsoft YaHei UI", 9F * DpiScale);
+        _statusLabel.Padding = new Padding(Scaled(8), 0, Scaled(8), 0);
+        _atlasPanel.UpdateDpiScale(DpiScale);
     }
 
     private void OnFrameClicked(int frameIndex)
@@ -93,16 +107,24 @@ internal sealed class AtlasPanel : Panel
     private readonly UitexData _data;
     private readonly Bitmap _atlasImage;
     private int? _hoveredFrameIndex;
+    private float _dpiScale;
 
     public event Action<int>? FrameClicked;
     public event Action<int?>? FrameHoverChanged;
 
-    public AtlasPanel(UitexData data, Bitmap atlasImage)
+    public AtlasPanel(UitexData data, Bitmap atlasImage, float dpiScale)
     {
         _data = data;
         _atlasImage = atlasImage;
+        _dpiScale = dpiScale;
         DoubleBuffered = true;
         BackColor = Color.FromArgb(0x1A, 0x1A, 0x1A);
+    }
+
+    public void UpdateDpiScale(float dpiScale)
+    {
+        _dpiScale = dpiScale;
+        Invalidate();
     }
 
     protected override void OnResize(EventArgs eventargs)
@@ -143,7 +165,7 @@ internal sealed class AtlasPanel : Panel
 
                 // 帧号标签
                 var labelText = $"帧 {_hoveredFrameIndex.Value}";
-                using var labelFont = new Font("Microsoft YaHei UI", 8F);
+                using var labelFont = new Font("Microsoft YaHei UI", 8F * _dpiScale);
                 var labelSize = TextRenderer.MeasureText(labelText, labelFont);
                 var labelX = rect.Left;
                 var labelY = rect.Top - labelSize.Height - 2;

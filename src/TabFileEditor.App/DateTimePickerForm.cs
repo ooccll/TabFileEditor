@@ -7,6 +7,9 @@ public sealed class DateTimePickerForm : Form
     private readonly Button _okButton = new();
     private readonly Button _cancelButton = new();
 
+    private float DpiScale => DeviceDpi / 96f;
+    private int Scaled(int pixels) => (int)Math.Round(pixels * DpiScale);
+
     public DateTime SelectedDateTime => new(
         _datePicker.Value.Year,
         _datePicker.Value.Month,
@@ -18,7 +21,7 @@ public sealed class DateTimePickerForm : Form
     public DateTimePickerForm(DateTime initialDateTime)
     {
         Text = "选择日期时间";
-        Size = new Size(320, 240);
+        Size = new Size(Scaled(320), Scaled(240));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -28,37 +31,37 @@ public sealed class DateTimePickerForm : Form
         var dateLabel = new Label
         {
             Text = "日期:",
-            Location = new Point(20, 25),
+            Location = new Point(Scaled(20), Scaled(25)),
             AutoSize = true
         };
 
         _datePicker.Format = DateTimePickerFormat.Short;
-        _datePicker.Location = new Point(80, 22);
-        _datePicker.Width = 200;
+        _datePicker.Location = new Point(Scaled(80), Scaled(22));
+        _datePicker.Width = Scaled(200);
         _datePicker.Value = initialDateTime;
 
         var timeLabel = new Label
         {
             Text = "时间:",
-            Location = new Point(20, 65),
+            Location = new Point(Scaled(20), Scaled(65)),
             AutoSize = true
         };
 
         _timePicker.Format = DateTimePickerFormat.Time;
         _timePicker.ShowUpDown = true;
-        _timePicker.Location = new Point(80, 62);
-        _timePicker.Width = 200;
+        _timePicker.Location = new Point(Scaled(80), Scaled(62));
+        _timePicker.Width = Scaled(200);
         _timePicker.Value = initialDateTime;
 
         _okButton.Text = "确定";
         _okButton.DialogResult = DialogResult.OK;
-        _okButton.Location = new Point(80, 110);
-        _okButton.Size = new Size(80, 46);
+        _okButton.Location = new Point(Scaled(80), Scaled(110));
+        _okButton.Size = new Size(Scaled(80), Scaled(46));
 
         _cancelButton.Text = "取消";
         _cancelButton.DialogResult = DialogResult.Cancel;
-        _cancelButton.Location = new Point(180, 110);
-        _cancelButton.Size = new Size(80, 46);
+        _cancelButton.Location = new Point(Scaled(180), Scaled(110));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(46));
 
         Controls.AddRange(new Control[]
         {
@@ -69,5 +72,20 @@ public sealed class DateTimePickerForm : Form
 
         AcceptButton = _okButton;
         CancelButton = _cancelButton;
+
+        DpiChanged += (_, _) => ApplyDpiScaling();
+    }
+
+    private void ApplyDpiScaling()
+    {
+        Size = new Size(Scaled(320), Scaled(240));
+        _datePicker.Location = new Point(Scaled(80), Scaled(22));
+        _datePicker.Width = Scaled(200);
+        _timePicker.Location = new Point(Scaled(80), Scaled(62));
+        _timePicker.Width = Scaled(200);
+        _okButton.Location = new Point(Scaled(80), Scaled(110));
+        _okButton.Size = new Size(Scaled(80), Scaled(46));
+        _cancelButton.Location = new Point(Scaled(180), Scaled(110));
+        _cancelButton.Size = new Size(Scaled(80), Scaled(46));
     }
 }
