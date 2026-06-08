@@ -35,7 +35,7 @@ public sealed class QuestTextPreviewPanel : Panel
     {
         _loader = loader;
         DoubleBuffered = true;
-        BackColor = Color.FromArgb(0x98, 0x97, 0x93);
+        BackColor = Color.FromArgb(0x72, 0x71, 0x6E);
         AutoScroll = true;
         TabStop = true;
         Cursor = Cursors.IBeam;
