@@ -1273,6 +1273,8 @@ public sealed class MainForm : Form
         MessageBox.Show(this, "张育铭", "关于");
     }
 
+    private void UpdateRecentFilesMenu(List<string>? recentFiles) { }
+
     private void BrowseFile()
     {
         if (!ConfirmDiscardDirtyChanges("打开新文件前，存在未保存修改。是否放弃这些修改？"))
@@ -1322,7 +1324,13 @@ public sealed class MainForm : Form
             PopulateTitleRowSelector();
             RenderRows(selectFirstWhenAvailable: true);
             SetStatus($"已加载 {_document.DisplayName}，共 {_document.DataRows.Count} 行。");
-            SaveSettings(new AppSettings(_document.Path));
+            var settings = LoadSettings();
+            var recentFiles = settings.RecentFiles ?? new List<string>();
+            recentFiles.Remove(_document.Path);
+            recentFiles.Insert(0, _document.Path);
+            if (recentFiles.Count > 10) recentFiles.RemoveRange(10, recentFiles.Count - 10);
+            SaveSettings(new AppSettings(_document.Path, recentFiles));
+            UpdateRecentFilesMenu(recentFiles);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
         {
@@ -3028,7 +3036,7 @@ public sealed class MainForm : Form
         int? CurrentCellRowIndex,
         int? CurrentCellColumnIndex);
 
-    private sealed record AppSettings(string? LastOpenedFilePath);
+    private sealed record AppSettings(string? LastOpenedFilePath, List<string>? RecentFiles);
 
     private static string GetSettingsFilePath()
     {
@@ -3040,11 +3048,11 @@ public sealed class MainForm : Form
         try
         {
             var path = GetSettingsFilePath();
-            if (!File.Exists(path)) return new AppSettings(null);
+            if (!File.Exists(path)) return new AppSettings(null, null);
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings(null);
+            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings(null, null);
         }
-        catch { return new AppSettings(null); }
+        catch { return new AppSettings(null, null); }
     }
 
     private static void SaveSettings(AppSettings settings)
