@@ -163,11 +163,14 @@ public sealed class QuestTextPreviewPanel : Panel
         }
 
         // Draw caret
-        if (Focused && _caretOffset >= 0 && _caretOffset < layout.CaretPositions.Count)
+        if (Focused)
         {
-            var caret = layout.CaretPositions[_caretOffset];
-            using var caretPen = new Pen(Color.White, ScaledF(1.5f));
-            g.DrawLine(caretPen, caret.X, caret.Y, caret.X, caret.Y + caret.Height);
+            var caretPos = FindCaretPosition(layout, _caretOffset);
+            if (caretPos != null)
+            {
+                using var caretPen = new Pen(Color.White, ScaledF(1.5f));
+                g.DrawLine(caretPen, caretPos.X, caretPos.Y, caretPos.X, caretPos.Y + caretPos.Height);
+            }
         }
 
         AutoScrollMinSize = new Size(0, Math.Max(0, (int)Math.Ceiling(layout.Height + PaddingPx)));
@@ -435,7 +438,9 @@ public sealed class QuestTextPreviewPanel : Panel
         var layout = LayoutDocument(g);
         if (layout.CaretPositions.Count == 0) return;
 
-        var targetX = _verticalCaretTargetX ?? layout.CaretPositions[_caretOffset].X;
+        var currentCaretPos = FindCaretPosition(layout, _caretOffset);
+        if (currentCaretPos == null) return;
+        var targetX = _verticalCaretTargetX ?? currentCaretPos.X;
         var newOffset = FindVerticalCaretOffset(layout, _caretOffset, lineDelta, targetX);
         _verticalCaretTargetX = targetX;
 
@@ -450,7 +455,9 @@ public sealed class QuestTextPreviewPanel : Panel
         var positions = layout.CaretPositions;
         if (positions.Count == 0) return currentOffset;
 
-        var currentY = positions[currentOffset].Y;
+        var currentCaretPos = FindCaretPosition(layout, currentOffset);
+        if (currentCaretPos == null) return currentOffset;
+        var currentY = currentCaretPos.Y;
 
         var lineYs = positions.Select(p => p.Y).Distinct().OrderBy(y => y).ToList();
         var currentLineIndex = lineYs.BinarySearch(currentY);
@@ -462,7 +469,7 @@ public sealed class QuestTextPreviewPanel : Panel
 
         var targetY = lineYs[targetLineIndex];
 
-        var bestOffset = currentOffset;
+        var bestBufferOffset = currentOffset;
         var bestDistance = double.MaxValue;
         for (var i = 0; i < positions.Count; i++)
         {
@@ -472,11 +479,11 @@ public sealed class QuestTextPreviewPanel : Panel
             if (distance < bestDistance)
             {
                 bestDistance = distance;
-                bestOffset = i;
+                bestBufferOffset = positions[i].BufferOffset;
             }
         }
 
-        return bestOffset;
+        return bestBufferOffset;
     }
 
     private void CopySelection()
@@ -535,7 +542,7 @@ public sealed class QuestTextPreviewPanel : Panel
             if (distance < bestDistance)
             {
                 bestDistance = distance;
-                bestOffset = i;
+                bestOffset = layout.CaretPositions[i].BufferOffset;
             }
         }
 
@@ -565,7 +572,7 @@ public sealed class QuestTextPreviewPanel : Panel
             // Handle special markers
             if (ch == QuestTextDocument.IndentMarker)
             {
-                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
+                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height), offset));
                 // Advance X by indent width, no visible character
                 x += IndentWidth;
                 items.Add(new CharLayoutItem(offset, "", new RectangleF(x - IndentWidth, y, IndentWidth, font.Height), font, spec, RenderKind.Indent));
@@ -575,7 +582,7 @@ public sealed class QuestTextPreviewPanel : Panel
             if (ch == QuestTextDocument.LineHeightMarker)
             {
                 var barHeight = ScaledF(16f);
-                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
+                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height), offset));
                 y += barHeight;
                 var bounds = new RectangleF(PaddingPx, y - barHeight / 2, maxWidth, barHeight);
                 items.Add(new CharLayoutItem(offset, "", bounds, font, spec, RenderKind.LineHeightBar));
@@ -587,7 +594,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var node = Document.GetNodeAt(offset);
                 var iconId = node is QuestTextNode.Icon ic ? ic.IconId : 0;
                 var displayText = $"[图标{iconId}]";
-                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
+                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height), offset));
                 var width = g.MeasureString(displayText, font, PointF.Empty, StringFormat.GenericTypographic).Width;
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, displayText, bounds, font, spec, RenderKind.IconPlaceholder));
@@ -601,7 +608,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var node = Document.GetNodeAt(offset);
                 var amount = node is QuestTextNode.Money m ? m.Amount : 0;
                 var displayText = $"💰{amount}金";
-                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
+                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height), offset));
                 var width = g.MeasureString(displayText, font, PointF.Empty, StringFormat.GenericTypographic).Width;
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, displayText, bounds, font, spec, RenderKind.MoneyPlaceholder));
@@ -616,7 +623,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var node = Document.GetNodeAt(offset);
                 var tagName = node is QuestTextNode.ReservedTag rt ? rt.Name : "?";
                 var displayText = $"[{tagName}]";
-                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
+                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height), offset));
                 var width = g.MeasureString(displayText, font, PointF.Empty, StringFormat.GenericTypographic).Width;
                 var bounds = new RectangleF(x, y, width, font.Height);
                 items.Add(new CharLayoutItem(offset, displayText, bounds, font, spec, RenderKind.ReservedTagPlaceholder));
@@ -631,7 +638,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 var displayText = isPlayerName ? QuestTextDocument.PlayerNameDisplay : QuestTextDocument.FactionTitleDisplay;
                 var placeholderFont = GetFont(_loader.ResolveFont(QuestTextDocument.DefaultFontSchemeId));
                 var placeholderRenderKind = isPlayerName ? RenderKind.PlayerNamePlaceholder : RenderKind.FactionTitlePlaceholder;
-                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, placeholderFont.Height)));
+                caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, placeholderFont.Height), offset));
 
                 var totalWidth = 0f;
                 var charIdx = offset + 1; // display chars start after the marker in buffer
@@ -654,7 +661,7 @@ public sealed class QuestTextPreviewPanel : Panel
             }
 
             // Normal character (including \n)
-            caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height)));
+            caretPositions.Add(new CaretLayoutItem(x, y, Math.Max(lineHeight, font.Height), offset));
 
             if (ch == '\n')
             {
@@ -673,7 +680,7 @@ public sealed class QuestTextPreviewPanel : Panel
                 x = PaddingPx;
                 y += lineHeight + LineSpacing;
                 lineHeight = font.Height;
-                caretPositions[^1] = new CaretLayoutItem(x, y, lineHeight);
+                caretPositions[^1] = new CaretLayoutItem(x, y, lineHeight, offset);
             }
 
             var charBounds = new RectangleF(x, y, width2, font.Height);
@@ -682,7 +689,7 @@ public sealed class QuestTextPreviewPanel : Panel
             lineHeight = Math.Max(lineHeight, font.Height);
         }
 
-        caretPositions.Add(new CaretLayoutItem(x, y, lineHeight));
+        caretPositions.Add(new CaretLayoutItem(x, y, lineHeight, buf.Count));
         return new LayoutResult(items, caretPositions, y + lineHeight);
     }
 
@@ -831,14 +838,24 @@ public sealed class QuestTextPreviewPanel : Panel
         DocumentChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private static CaretLayoutItem? FindCaretPosition(LayoutResult layout, int bufferOffset)
+    {
+        for (var i = 0; i < layout.CaretPositions.Count; i++)
+        {
+            if (layout.CaretPositions[i].BufferOffset == bufferOffset)
+                return layout.CaretPositions[i];
+        }
+        return null;
+    }
+
     private void ScrollToCaret()
     {
         if (_caretOffset < 0) return;
         using var g = CreateGraphics();
         var layout = LayoutDocument(g);
-        if (_caretOffset >= layout.CaretPositions.Count) return;
+        var caret = FindCaretPosition(layout, _caretOffset);
+        if (caret == null) return;
 
-        var caret = layout.CaretPositions[_caretOffset];
         var visibleTop = -AutoScrollPosition.Y;
         var visibleBottom = visibleTop + ClientSize.Height;
 
@@ -887,7 +904,7 @@ public sealed class QuestTextPreviewPanel : Panel
         ResolvedFontSpec Spec,
         RenderKind RenderKind = RenderKind.Normal);
 
-    private sealed record CaretLayoutItem(float X, float Y, float Height);
+    private sealed record CaretLayoutItem(float X, float Y, float Height, int BufferOffset);
 
     private sealed record LayoutResult(
         IReadOnlyList<CharLayoutItem> Items,
