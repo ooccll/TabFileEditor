@@ -238,7 +238,7 @@ public sealed class QuestTextEditorForm : Form
         _splitContainer.Dock = DockStyle.Fill;
         _splitContainer.Orientation = Orientation.Horizontal;
         _splitContainer.BackColor = WindowBg;
-        _splitContainer.Panel1.BackColor = Color.FromArgb(0x5A, 0x5A, 0x5A);
+        _splitContainer.Panel1.BackColor = Color.FromArgb(0x1E, 0x1E, 0x1E);
         _splitContainer.SplitterWidth = Scaled(6);
 
         _splitContainer.Panel1.Controls.Add(_previewPanel);
