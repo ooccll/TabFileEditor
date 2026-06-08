@@ -208,6 +208,6 @@ public static class RichTextMarkup
 
     public static bool LooksLikeRichText(string? value)
     {
-        return !string.IsNullOrEmpty(value) && value.Contains("<text>");
+        return !string.IsNullOrEmpty(value) && value.Contains("<text>", StringComparison.OrdinalIgnoreCase);
     }
 }
