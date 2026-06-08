@@ -141,7 +141,7 @@ public sealed class RichTextDocument
 public static class RichTextMarkup
 {
     private static readonly Regex TextElementRegex = new(
-        @"<text>text=""(.*?)""\s+font=(\d+)</text>",
+        @"<text>text=""(.*?)""\s+font=(\d+)\s*</text>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static RichTextDocument Parse(string markup)
