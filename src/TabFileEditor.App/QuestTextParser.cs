@@ -182,7 +182,7 @@ public sealed class QuestTextDocument
         var buf = Buffer;
         offset = Math.Clamp(offset, 0, buf.Count);
 
-        var (nodeIndex, _) = FindNodePosition(offset);
+        var (nodeIndex, charInNode) = FindNodePosition(offset);
 
         if (nodeIndex < 0)
         {
@@ -190,16 +190,54 @@ public sealed class QuestTextDocument
         }
         else
         {
-            // Insert before the node at this position (or after if at end of a node)
-            var bufEntry = offset < buf.Count ? buf[offset] : buf[^1];
-            var targetNodeIndex = bufEntry.NodeIndex;
+            var n = Nodes[nodeIndex];
+            switch (n)
+            {
+                case QuestTextNode.TextRun or QuestTextNode.FontBlock:
+                {
+                    var originalText = n switch
+                    {
+                        QuestTextNode.TextRun tr => tr.Text,
+                        QuestTextNode.FontBlock fb => fb.Text,
+                        _ => ""
+                    };
+                    var fontSchemeId = n switch
+                    {
+                        QuestTextNode.TextRun tr => tr.FontSchemeId,
+                        QuestTextNode.FontBlock fb => fb.FontSchemeId,
+                        _ => 0
+                    };
+                    var before = originalText[..charInNode];
+                    var after = originalText[charInNode..];
 
-            // If we're at the start of a node, insert before it
-            var nodeStart = FindNodeStart(targetNodeIndex);
-            if (offset == nodeStart)
-                Nodes.Insert(targetNodeIndex, node);
-            else
-                Nodes.Insert(targetNodeIndex + 1, node);
+                    var replacement = new List<QuestTextNode>();
+                    if (before.Length > 0)
+                        replacement.Add(n is QuestTextNode.FontBlock
+                            ? new QuestTextNode.FontBlock(before, fontSchemeId)
+                            : new QuestTextNode.TextRun(before, fontSchemeId));
+                    replacement.Add(node);
+                    if (after.Length > 0)
+                        replacement.Add(n is QuestTextNode.FontBlock
+                            ? new QuestTextNode.FontBlock(after, fontSchemeId)
+                            : new QuestTextNode.TextRun(after, fontSchemeId));
+
+                    if (replacement.Count == 0)
+                        replacement.Add(node);
+
+                    Nodes.RemoveAt(nodeIndex);
+                    Nodes.InsertRange(nodeIndex, replacement);
+                    break;
+                }
+                default:
+                {
+                    var nodeStart = FindNodeStart(nodeIndex);
+                    if (offset == nodeStart)
+                        Nodes.Insert(nodeIndex, node);
+                    else
+                        Nodes.Insert(nodeIndex + 1, node);
+                    break;
+                }
+            }
         }
 
         NormalizeInPlace();
