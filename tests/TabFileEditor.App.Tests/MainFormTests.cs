@@ -1489,6 +1489,52 @@ public sealed class MainFormTests : IDisposable
         });
     }
 
+    [Fact]
+    public void LoadingFileAddsToRecentFilesMenu()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var menuStrip = FindDescendants<MenuStrip>(form).Single();
+            var fileMenu = menuStrip.Items.Cast<ToolStripMenuItem>().Single(m => m.Text == "文件(&F)");
+            Assert.True(fileMenu.DropDownItems.Count >= 4);
+            var recentItems = fileMenu.DropDownItems.Cast<ToolStripItem>()
+                .Skip(3)
+                .OfType<ToolStripMenuItem>()
+                .ToList();
+            Assert.NotEmpty(recentItems);
+            Assert.Equal(tablePath, recentItems[0].Text);
+        });
+    }
+
+    [Fact]
+    public void RecentFilesMenuShowsCompleteFilePath()
+    {
+        RunOnStaThread(() =>
+        {
+            var tablePath = CreateSampleTable();
+            using var form = new MainForm();
+            form.CreateControl();
+            FindFilePathTextBox(form).Text = tablePath;
+
+            InvokePrivate(form, "LoadCurrentFile");
+
+            var menuStrip = FindDescendants<MenuStrip>(form).Single();
+            var fileMenu = menuStrip.Items.Cast<ToolStripMenuItem>().Single(m => m.Text == "文件(&F)");
+            var recentItems = fileMenu.DropDownItems.Cast<ToolStripItem>()
+                .Skip(3)
+                .OfType<ToolStripMenuItem>()
+                .ToList();
+            Assert.Contains(recentItems, item => item.Text == tablePath);
+        });
+    }
+
     private string CreateSampleTable()
     {
         var path = Path.Combine(_tempDir, "QuestTab.xls");
